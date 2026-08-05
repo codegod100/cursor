@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MotherDuck Explorer</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div class="hero-badge">Powered by MotherDuck</div>
+        <h1>NYC Taxi Explorer</h1>
+        <p class="hero-subtitle">
+          A simple web app that queries the
+          <code>sample_data.nyc.taxi</code> dataset through MotherDuck's Postgres
+          endpoint.
+        </p>
+      </header>
+
+      <section class="panel stats-panel">
+        <div class="panel-header">
+          <h2>Trip statistics</h2>
+          <form id="stats-form" class="stats-form">
+            <label>
+              Start
+              <input type="date" name="start" value="2022-11-01" required />
+            </label>
+            <label>
+              End
+              <input type="date" name="end" value="2022-12-01" required />
+            </label>
+            <button type="submit">Run query</button>
+          </form>
+        </div>
+        <div id="stats-cards" class="stats-cards">
+          <div class="stat-card placeholder">Select a date range and run a query.</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Recent trips</h2>
+          <button id="refresh-trips" type="button" class="ghost-button">Refresh</button>
+        </div>
+        <div id="trips-status" class="status-message" hidden></div>
+        <div class="table-wrap">
+          <table id="trips-table">
+            <thead>
+              <tr>
+                <th>Pickup time</th>
+                <th>Passengers</th>
+                <th>Distance (mi)</th>
+                <th>Fare ($)</th>
+                <th>Payment</th>
+              </tr>
+            </thead>
+            <tbody id="trips-body">
+              <tr>
+                <td colspan="5" class="loading-cell">Loading trips from MotherDuck…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <p>
+          Queries run server-side via the
+          <a href="https://motherduck.com/docs/key-tasks/authenticating-and-connecting-to-motherduck/postgres-endpoint/" target="_blank" rel="noreferrer">Postgres wire protocol</a>.
+          Your token never leaves the server.
+        </p>
+      </footer>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
