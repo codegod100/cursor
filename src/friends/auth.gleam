@@ -41,6 +41,7 @@ pub fn login_redirect(config: Config, _request: wisp.Request) -> wisp.Response {
     )
 
   wisp.html_response(body, 200)
+  |> no_store
 }
 
 pub fn callback(
@@ -57,27 +58,40 @@ pub fn callback(
   let name = token_name(token_body)
   let user = UserSession(sub: sub, name: name)
 
-  // Do not set friends_session on this response — it arrives via a cross-site
-  // redirect from Pocket ID and bounce-tracking drops those cookies. Issue a
-  // one-time server ticket and set the session only after a same-site click.
+  // Do not set friends_session here — this response is still on the cross-site
+  // IdP return navigation. Hand the user a server ticket instead.
   use ticket <- result.try(pending.issue(config.data_path, user))
   Ok(post_login_continue(user, ticket))
 }
 
-/// Consume a pending ticket and set the session cookie on a same-site 200.
-/// Returns the user so the caller can render the signed-in home page directly
-/// (avoids a further redirect that bounce-tracking might strip cookies from).
+/// Exchange the callback ticket for an establish form. Still no session cookie:
+/// browsers drop cookies set on the IdP return chain, and refreshing
+/// `/auth/complete?ticket=…` must not look like a signed-in page.
 pub fn complete(
   config: Config,
   request: wisp.Request,
-) -> Result(#(UserSession, wisp.Response), String) {
+) -> Result(wisp.Response, String) {
   use ticket <- result.try(query_param(request, "ticket"))
+  use user <- result.try(pending.take(config.data_path, ticket))
+  use establish <- result.try(pending.issue(config.data_path, user))
+  Ok(establish_form(user, establish))
+}
+
+/// Set the session cookie on a same-site POST (user click).
+/// Returns the user so the caller can render `/` content on this 200 response
+/// (cookies on 303s are unreliable; refresh must land on `/`, not a ticket URL).
+pub fn establish(
+  config: Config,
+  request: wisp.Request,
+) -> Result(#(UserSession, wisp.Response), String) {
+  use ticket <- result.try(form_param(request, "ticket"))
   use user <- result.try(pending.take(config.data_path, ticket))
 
   Ok(#(
     user,
     wisp.response(200)
-    |> write_session(request, user),
+    |> write_session(request, user)
+    |> no_store,
   ))
 }
 
@@ -130,15 +144,42 @@ fn post_login_continue(user: UserSession, ticket: String) -> wisp.Response {
         <> ".</p>"
         <> "<p><a class=\"btn\" href=\""
         <> html.escape_attr(location)
-        <> "\">Continue to Friends</a></p>",
+        <> "\">Continue</a></p>",
     )
 
   wisp.html_response(body, 200)
+  |> no_store
+}
+
+fn establish_form(user: UserSession, ticket: String) -> wisp.Response {
+  let body =
+    html.page(
+      "Enter Friends",
+      "<header><h1>Friends</h1></header>"
+        <> "<p>Welcome, "
+        <> html.escape_text(display_name(user))
+        <> ".</p>"
+        <> "<p>Click below to finish signing in on this device.</p>"
+        <> "<form method=\"post\" action=\"/auth/establish\">"
+        <> "<input type=\"hidden\" name=\"ticket\" value=\""
+        <> html.escape_attr(ticket)
+        <> "\">"
+        <> "<button type=\"submit\">Enter Friends</button>"
+        <> "</form>",
+    )
+
+  wisp.html_response(body, 200)
+  |> no_store
 }
 
 pub fn logout(request: wisp.Request) -> wisp.Response {
   wisp.redirect("/")
   |> clear(request)
+  |> no_store
+}
+
+fn no_store(response: wisp.Response) -> wisp.Response {
+  wisp.set_header(response, "cache-control", "no-store")
 }
 
 fn idp_authorize_location(config: Config, state: String) -> String {
@@ -173,6 +214,25 @@ fn query_param(request: wisp.Request, key: String) -> Result(String, String) {
       case list_find(params, key) {
         Some(value) -> Ok(value)
         None -> Error("missing query parameter: " <> key)
+      }
+  }
+}
+
+fn form_param(request: wisp.Request, key: String) -> Result(String, String) {
+  case wisp.read_body_bits(request) {
+    Error(_) -> Error("missing form body")
+    Ok(bits) ->
+      case bit_array.to_string(bits) {
+        Error(_) -> Error("invalid form body")
+        Ok(text) ->
+          case uri.parse_query(text) {
+            Error(_) -> Error("invalid form body")
+            Ok(params) ->
+              case list_find(params, key) {
+                Some(value) -> Ok(value)
+                None -> Error("missing form field: " <> key)
+              }
+          }
       }
   }
 }

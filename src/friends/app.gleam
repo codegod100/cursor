@@ -32,6 +32,7 @@ pub fn handle(app: App, request: wisp.Request) -> wisp.Response {
     http.Get, "/auth/callback" -> auth_callback(app, request)
     http.Get, "/auth/complete" -> auth_complete(app, request)
     http.Get, "/auth/logout" -> auth.logout(request)
+    http.Post, "/auth/establish" -> auth_establish(app, request)
     http.Post, "/handles" -> add_handle(app, request)
     http.Post, path -> {
       case is_delete_handle_path(path) {
@@ -99,7 +100,15 @@ fn auth_callback(app: App, request: wisp.Request) -> wisp.Response {
 }
 
 fn auth_complete(app: App, request: wisp.Request) -> wisp.Response {
+  let _ = app
   case auth.complete(app.config, request) {
+    Ok(response) -> response
+    Error(reason) -> auth_error(reason)
+  }
+}
+
+fn auth_establish(app: App, request: wisp.Request) -> wisp.Response {
+  case auth.establish(app.config, request) {
     Ok(#(user, response)) -> {
       let body =
         home.render(
@@ -108,6 +117,8 @@ fn auth_complete(app: App, request: wisp.Request) -> wisp.Response {
           store.open(app.config.data_path),
           None,
         )
+        <> "<script>history.replaceState({},\"\",\"/\")</script>"
+
       response
       |> wisp.set_header("content-type", "text/html; charset=utf-8")
       |> wisp.set_body(wisp.Text(body))
