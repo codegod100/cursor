@@ -6,8 +6,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 
-pub const default_issuer =
-  "https://id.openbao.boxd/v1/identity/oidc/provider/default"
+pub const default_issuer = "https://id.openbao.boxd.sh"
 
 pub const default_port = 8000
 
@@ -31,7 +30,7 @@ pub type Config {
 
 pub fn load() -> Result(Config, String) {
   use port <- result.try(read_int("FRIENDS_PORT", default_port))
-  use base_url <- result.try(require_env_or("FRIENDS_BASE_URL", "http://localhost:8080"))
+  use base_url <- result.try(require_env_or("FRIENDS_BASE_URL", "http://localhost:8000"))
   use secret_key_base <- result.try(require_env_or(
     "FRIENDS_SECRET_KEY_BASE",
     "development-secret-key-base-change-me-in-production-please",
@@ -63,11 +62,13 @@ pub fn discovery_url(config: Config) -> String {
 }
 
 pub fn authorize_url(config: Config) -> String {
+  // Pocket ID exposes /authorize at the issuer root.
   config.oidc_issuer <> "/authorize"
 }
 
 pub fn token_url(config: Config) -> String {
-  config.oidc_issuer <> "/token"
+  // Pocket ID token endpoint is under /api/oidc (see .well-known/openid-configuration).
+  config.oidc_issuer <> "/api/oidc/token"
 }
 
 fn require_env(name: String) -> Result(String, String) {

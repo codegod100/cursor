@@ -6,13 +6,13 @@ set -euo pipefail
 #
 # Usage:
 #   ./scripts/provision-boxd.sh
-#   REPO_URL=https://github.com/codegod100/friends.git ./scripts/provision-boxd.sh
 
 VM_NAME="${BOXD_VM_NAME:-friends}"
 APP_PORT="${FRIENDS_PORT:-8000}"
 REPO_URL="${REPO_URL:-https://github.com/codegod100/friends.git}"
 APP_DIR="/home/boxd/friends"
 SERVICE_NAME="friends"
+export PATH="${HOME}/.local/bin:${PATH}"
 
 if ! command -v boxd >/dev/null 2>&1; then
   curl -fsSL https://boxd.sh/downloads/install.sh | sh
@@ -21,7 +21,7 @@ fi
 
 boxd machine get "$VM_NAME" --json >/dev/null 2>&1 || boxd machine new "$VM_NAME" --json
 
-echo "==> Installing Erlang and Gleam on $VM_NAME"
+echo "==> Installing mise, Erlang, and Gleam on $VM_NAME"
 boxd machine exec "$VM_NAME" -- bash -lc '
   set -euo pipefail
   if ! command -v mise >/dev/null 2>&1; then
@@ -29,6 +29,7 @@ boxd machine exec "$VM_NAME" -- bash -lc '
   fi
   export PATH="$HOME/.local/bin:$PATH"
   eval "$(mise activate bash)"
+  mise --version
 '
 
 echo "==> Cloning or updating repository"
@@ -43,16 +44,38 @@ boxd machine exec "$VM_NAME" -- bash -lc "
     git clone $REPO_URL $APP_DIR
   fi
   cd $APP_DIR
+  mise trust
   mise install
   gleam deps download
   gleam build
 "
 
+echo "==> Writing production .env from OpenBao (or local .env)"
 if [[ -f .env ]]; then
-  echo "==> Pushing local .env to VM"
   boxd env push "$VM_NAME" --file .env --dest "$APP_DIR/.env"
 else
-  echo "WARN: No local .env found. Copy .env.example to .env and set production secrets first."
+  python3 - <<'PY' | boxd machine exec "$VM_NAME" -- bash -lc "cat > $APP_DIR/.env && chmod 600 $APP_DIR/.env"
+import json, urllib.request, os
+BAO = "https://openbao.boxd.sh"
+tok = os.environ["OPENBAO_TOKEN"]
+req = urllib.request.Request(
+    BAO + "/v1/secret/data/friends/production",
+    headers={"X-Vault-Token": tok},
+)
+with urllib.request.urlopen(req) as f:
+    data = json.load(f)["data"]["data"]
+for k in (
+    "FRIENDS_OIDC_CLIENT_ID",
+    "FRIENDS_OIDC_CLIENT_SECRET",
+    "FRIENDS_OIDC_ISSUER",
+    "FRIENDS_BASE_URL",
+    "FRIENDS_OIDC_REDIRECT_URI",
+    "FRIENDS_SECRET_KEY_BASE",
+    "FRIENDS_PORT",
+):
+    print(f"{k}={data[k]}")
+print("FRIENDS_DATA_PATH=data/handles.json")
+PY
 fi
 
 echo "==> Installing systemd service"
@@ -69,7 +92,7 @@ boxd machine proxy set-port --vm "$VM_NAME" --port "$APP_PORT"
 
 echo "==> Verifying app responds"
 boxd machine exec "$VM_NAME" -- bash -lc "
-  for i in \$(seq 1 30); do
+  for i in \$(seq 1 45); do
     if curl -sf http://127.0.0.1:$APP_PORT/ -o /dev/null; then
       echo HTTP OK on port $APP_PORT
       exit 0
@@ -77,7 +100,7 @@ boxd machine exec "$VM_NAME" -- bash -lc "
     sleep 1
   done
   echo FAILED: app did not respond on port $APP_PORT
-  sudo journalctl -u $SERVICE_NAME -n 50 --no-pager
+  sudo journalctl -u $SERVICE_NAME -n 80 --no-pager
   exit 1
 "
 
