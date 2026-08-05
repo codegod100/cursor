@@ -25,8 +25,8 @@ pub fn render(
 
 fn render_guest(config: Config) -> String {
   "<header><h1>Friends</h1></header>"
-  <> "<p>Sign in with OpenBao to curate a unified Atom feed from your favorite Bluesky accounts.</p>"
-  <> "<p><a class=\"btn\" href=\"/auth/login\">Sign in with OpenBao</a></p>"
+  <> "<p>Sign in with Pocket ID to curate a unified Atom feed from your favorite Bluesky accounts.</p>"
+  <> "<p><a class=\"btn\" href=\"/auth/login\">Sign in with Pocket ID</a></p>"
   <> "<p class=\"meta\">Identity provider: "
   <> html.escape_text(config.oidc_issuer)
   <> "</p>"
