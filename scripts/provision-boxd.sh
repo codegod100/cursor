@@ -46,6 +46,10 @@ boxd machine exec "$VM_NAME" -- bash -lc "
   cd $APP_DIR
   mise trust
   mise install
+  if ! command -v rebar3 >/dev/null 2>&1; then
+    curl -fsSL https://s3.amazonaws.com/rebar3/rebar3 -o \"\$HOME/.local/bin/rebar3\"
+    chmod +x \"\$HOME/.local/bin/rebar3\"
+  fi
   gleam deps download
   gleam build
 "

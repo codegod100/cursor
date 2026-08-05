@@ -21,6 +21,7 @@ pub fn main() {
         |> wisp_mist.handler(secret_key_base)
         |> mist.new
         |> mist.port(app_config.port)
+        |> mist.bind("0.0.0.0")
         |> mist.start
 
       process.sleep_forever()

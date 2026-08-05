@@ -6,8 +6,10 @@ After=network.target
 Type=simple
 User=boxd
 WorkingDirectory=/home/boxd/friends
+Environment=HOME=/home/boxd
+Environment=PATH=/home/boxd/.local/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=-/home/boxd/friends/.env
-ExecStart=/bin/bash -lc 'exec mise exec -- gleam run'
+ExecStart=/bin/bash -lc 'eval "$(/home/boxd/.local/bin/mise activate bash)" && cd /home/boxd/friends && exec gleam run'
 Restart=on-failure
 RestartSec=5
 
