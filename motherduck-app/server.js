@@ -3,6 +3,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMotherDuckConfigured, withClient } from "./lib/motherduck.js";
+import { loadSecrets } from "./lib/secrets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -17,13 +18,18 @@ app.get("/api/health", (_req, res) => {
     status: "ok",
     database: process.env.MOTHERDUCK_DB ?? "sample_data",
     motherduckConfigured: isMotherDuckConfigured(),
+    openbaoTokenPresent: Boolean(process.env.OPENBAO_TOKEN),
+    openbaoAddressConfigured: Boolean(
+      process.env.OPENBAO_ADDR ?? process.env.BAO_ADDR ?? process.env.VAULT_ADDR
+    ),
   });
 });
 
 function requireMotherDuck(_req, res, next) {
   if (!isMotherDuckConfigured()) {
     return res.status(503).json({
-      error: "MotherDuck is not configured. Set MOTHERDUCK_TOKEN in your .env file.",
+      error:
+        "MotherDuck is not configured. Set MOTHERDUCK_TOKEN directly or store it in OpenBao.",
     });
   }
   next();
@@ -83,6 +89,17 @@ app.get("/api/stats", requireMotherDuck, async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`MotherDuck app listening on http://localhost:${port}`);
-});
+async function start() {
+  try {
+    const secretStatus = await loadSecrets();
+    console.log(`Secrets loaded from ${secretStatus.source}`);
+  } catch (error) {
+    console.error("Failed to load secrets from OpenBao:", error.message);
+  }
+
+  app.listen(port, () => {
+    console.log(`MotherDuck app listening on http://localhost:${port}`);
+  });
+}
+
+start();

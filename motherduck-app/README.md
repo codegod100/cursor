@@ -21,22 +21,45 @@ The UI reads from MotherDuck's built-in `sample_data.nyc.taxi` dataset, so it wo
 cd motherduck-app
 npm install
 cp .env.example .env
-# Edit .env and set MOTHERDUCK_TOKEN
+# Edit .env and set MOTHERDUCK_TOKEN, or configure OpenBao (see below)
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Secrets
+
+The app accepts `MOTHERDUCK_TOKEN` in two ways:
+
+1. **Direct env var** — set `MOTHERDUCK_TOKEN` in `.env` for local development.
+2. **OpenBao** — on startup, if `MOTHERDUCK_TOKEN` is unset and `OPENBAO_TOKEN` is present, the server reads `MOTHERDUCK_TOKEN` from OpenBao before connecting.
+
+For OpenBao in Cursor Cloud Agents:
+
+- `OPENBAO_TOKEN` is injected automatically when OpenBao is enabled for your environment.
+- Add `MOTHERDUCK_TOKEN` in the Cursor dashboard (stored in OpenBao).
+- Also add `OPENBAO_ADDR` as an environment secret with your OpenBao server URL if it is not injected automatically.
+
+The loader tries these KV paths:
+
+- `secret/data/MOTHERDUCK_TOKEN`
+- `secret/data/<environment-id>/MOTHERDUCK_TOKEN` when `CURSOR_ENVIRONMENT_ID` is set
+
 ## Environment variables
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `MOTHERDUCK_TOKEN` | Yes | — | MotherDuck access token (used as the Postgres password) |
+| `MOTHERDUCK_TOKEN` | Yes* | — | MotherDuck access token (used as the Postgres password) |
+| `OPENBAO_TOKEN` | OpenBao path | — | Token for reading secrets from OpenBao |
+| `OPENBAO_ADDR` | OpenBao path | — | OpenBao server URL (for example `https://openbao.example.com:8200`) |
+| `OPENBAO_MOUNT` | No | `secret` | KV mount name |
 | `MOTHERDUCK_HOST` | No | `pg.us-east-1-aws.motherduck.com` | Postgres endpoint host (use EU host for EU orgs) |
 | `MOTHERDUCK_DB` | No | `sample_data` | Database name |
 | `PORT` | No | `3000` | HTTP port |
 
-Create a token in the MotherDuck UI under **Settings → Access Tokens**.
+\*Required either directly or via OpenBao.
+
+Create a MotherDuck token in the UI under **Settings → Access Tokens**.
 
 ## API
 
