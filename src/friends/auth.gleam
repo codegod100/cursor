@@ -67,12 +67,33 @@ pub fn callback(
   use sub <- result.try(token_subject(token_body))
   let name = token_name(token_body)
   let user = UserSession(sub: sub, name: name)
+  // Set the session cookie on a same-origin 200 bounce, not a 303.
+  // The callback arrives via a cross-site redirect from Pocket ID; browsers'
+  // bounce-tracking mitigations often drop cookies set on the subsequent 303
+  // to "/", which shows up as: sign-in works once, then refresh returns to
+  // the guest page.
   let response =
-    wisp.redirect("/")
+    post_login_bounce("/")
     |> write(request, user)
     |> clear_state_cookie(request)
 
   Ok(#(user, response))
+}
+
+fn post_login_bounce(location: String) -> wisp.Response {
+  let body =
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+    <> "<meta http-equiv=\"refresh\" content=\"0;url="
+    <> html_attr(location)
+    <> "\">"
+    <> "<title>Signed in…</title></head><body>"
+    <> "<p>Signed in. "
+    <> "<a href=\""
+    <> html_attr(location)
+    <> "\">Continue</a></p>"
+    <> "</body></html>"
+
+  wisp.html_response(body, 200)
 }
 
 pub fn logout(request: wisp.Request) -> wisp.Response {

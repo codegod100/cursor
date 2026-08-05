@@ -1,10 +1,32 @@
+import friends/session.{UserSession}
 import friends/store
+import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
 import simplifile
 
 pub fn main() -> Nil {
   gleeunit.main()
+}
+
+pub fn session_round_trip_with_name_test() {
+  let original = UserSession(sub: "user-1", name: Some("Ada"))
+  let assert Ok(decoded) = session.decode(session.encode(original))
+  decoded
+  |> should.equal(original)
+}
+
+pub fn session_round_trip_with_null_name_test() {
+  let original = UserSession(sub: "user-2", name: None)
+  let assert Ok(decoded) = session.decode(session.encode(original))
+  decoded
+  |> should.equal(original)
+}
+
+pub fn session_decode_missing_name_test() {
+  let assert Ok(decoded) = session.decode("{\"sub\":\"user-3\"}")
+  decoded
+  |> should.equal(UserSession(sub: "user-3", name: None))
 }
 
 pub fn normalize_handle_strips_at_sign_test() {

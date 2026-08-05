@@ -29,7 +29,12 @@ pub fn encode(session: UserSession) -> String {
 pub fn decode(raw: String) -> Result(UserSession, Nil) {
   let decoder = {
     use sub <- decode.field("sub", decode.string)
-    use name <- decode.field("name", decode.optional(decode.string))
+    // Accept missing name, JSON null, or a string.
+    use name <- decode.optional_field(
+      "name",
+      None,
+      decode.optional(decode.string),
+    )
     decode.success(UserSession(sub:, name:))
   }
 
