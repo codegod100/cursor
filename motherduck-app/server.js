@@ -3,7 +3,11 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMotherDuckConfigured, withClient } from "./lib/motherduck.js";
-import { isOpenBaoConfigured, loadSecrets } from "./lib/secrets.js";
+import {
+  getMotherDuckConfigurationError,
+  getSecretDiagnostics,
+  loadSecrets,
+} from "./lib/secrets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -14,22 +18,19 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/health", (_req, res) => {
+  const diagnostics = getSecretDiagnostics();
   res.json({
     status: "ok",
     database: process.env.MOTHERDUCK_DB ?? "sample_data",
     motherduckConfigured: isMotherDuckConfigured(),
-    openbaoConfigured: isOpenBaoConfigured(),
-    openbaoAddressConfigured: Boolean(
-      process.env.OPENBAO_ADDR ?? process.env.BAO_ADDR ?? process.env.VAULT_ADDR
-    ),
+    ...diagnostics,
   });
 });
 
 function requireMotherDuck(_req, res, next) {
   if (!isMotherDuckConfigured()) {
     return res.status(503).json({
-      error:
-        "MotherDuck is not configured. Set MOTHERDUCK_TOKEN directly or store it in OpenBao.",
+      error: getMotherDuckConfigurationError(),
     });
   }
   next();

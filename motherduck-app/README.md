@@ -29,35 +29,48 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Secrets
 
-The app accepts `MOTHERDUCK_TOKEN` in two ways:
+The app reads `MOTHERDUCK_TOKEN` from the environment at startup.
 
-1. **Direct env var** — set `MOTHERDUCK_TOKEN` in `.env` for local development.
-2. **OpenBao** — on startup, if `MOTHERDUCK_TOKEN` is unset and `OPENBAO_TOKEN` is present, the server reads `MOTHERDUCK_TOKEN` from OpenBao before connecting.
+### Local development
 
-For OpenBao in Cursor Cloud Agents:
+Set `MOTHERDUCK_TOKEN` in `.env`.
 
-- `OPENBAO_TOKEN` is injected automatically when OpenBao is enabled for your environment.
-- Add `MOTHERDUCK_TOKEN` in the Cursor dashboard (stored in OpenBao).
-- Also add `OPENBAO_ADDR` as an environment secret with your OpenBao server URL if it is not injected automatically.
+### Cursor Cloud Agents
 
-The loader tries these KV paths:
+Cursor injects dashboard secrets directly as environment variables. There is no fetchable OpenBao HTTP API inside the Cloud Agent VM.
+
+1. Open your environment in the [Cloud Agents dashboard](https://cursor.com/dashboard/cloud-agents).
+2. Add `MOTHERDUCK_TOKEN` as a **Runtime Secret** (or Environment Variable).
+3. Scope it to this environment if you use environment-scoped secrets.
+4. Restart the Cloud Agent so the new secret is injected.
+
+`OPENBAO_TOKEN` may also be injected, but it is not a substitute for `MOTHERDUCK_TOKEN`. The app only talks to a self-hosted OpenBao server when `OPENBAO_ADDR` is set.
+
+Check configuration with:
+
+```bash
+npm run secrets:check
+curl http://localhost:3000/api/health
+```
+
+### Self-hosted OpenBao (optional)
+
+If you run your own OpenBao server, set `OPENBAO_ADDR`, `OPENBAO_TOKEN`, and optionally `OPENBAO_MOUNT`. The loader tries:
 
 - `secret/data/MOTHERDUCK_TOKEN`
-- `secret/data/<environment-id>/MOTHERDUCK_TOKEN` when `CURSOR_ENVIRONMENT_ID` is set
+- `secret/data/<environment-id>/MOTHERDUCK_TOKEN`
 
 ## Environment variables
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `MOTHERDUCK_TOKEN` | Yes* | — | MotherDuck access token (used as the Postgres password) |
-| `OPENBAO_TOKEN` | OpenBao path | — | Token for reading secrets from OpenBao |
-| `OPENBAO_ADDR` | OpenBao path | — | OpenBao server URL (for example `https://openbao.example.com:8200`) |
+| `MOTHERDUCK_TOKEN` | Yes | — | MotherDuck access token (used as the Postgres password) |
+| `OPENBAO_TOKEN` | Self-hosted OpenBao | — | Token for reading secrets from your OpenBao server |
+| `OPENBAO_ADDR` | Self-hosted OpenBao | — | OpenBao server URL (for example `https://openbao.example.com:8200`) |
 | `OPENBAO_MOUNT` | No | `secret` | KV mount name |
 | `MOTHERDUCK_HOST` | No | `pg.us-east-1-aws.motherduck.com` | Postgres endpoint host (use EU host for EU orgs) |
 | `MOTHERDUCK_DB` | No | `sample_data` | Database name |
 | `PORT` | No | `3000` | HTTP port |
-
-\*Required either directly or via OpenBao.
 
 Create a MotherDuck token in the UI under **Settings → Access Tokens**.
 

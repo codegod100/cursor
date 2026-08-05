@@ -98,8 +98,11 @@ async function readSecretAtPath(address, token, path) {
   return extractSecretValue(payload, DEFAULT_SECRET_NAME);
 }
 
-export function isOpenBaoConfigured() {
-  return Boolean(process.env.OPENBAO_TOKEN);
+export function isOpenBaoFetchConfigured() {
+  return Boolean(
+    process.env.OPENBAO_TOKEN &&
+      (process.env.OPENBAO_ADDR ?? process.env.BAO_ADDR ?? process.env.VAULT_ADDR)
+  );
 }
 
 export async function fetchSecretFromOpenBao(secretName = DEFAULT_SECRET_NAME) {
@@ -114,7 +117,8 @@ export async function fetchSecretFromOpenBao(secretName = DEFAULT_SECRET_NAME) {
 
   if (addresses.length === 0) {
     throw new Error(
-      "OPENBAO_TOKEN is available, but no OpenBao server address is configured. Set OPENBAO_ADDR (or BAO_ADDR / VAULT_ADDR) if your secrets are not injected directly as MOTHERDUCK_TOKEN."
+      "OPENBAO_ADDR is not set. Self-hosted OpenBao fetch requires OPENBAO_ADDR (or BAO_ADDR / VAULT_ADDR). " +
+        "In Cursor Cloud Agents, add MOTHERDUCK_TOKEN as a Runtime Secret instead of fetching it over HTTP."
     );
   }
 
