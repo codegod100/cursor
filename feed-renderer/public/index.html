@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feed Renderer</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="home">
+    <div class="card">
+      <h1>Feed Renderer</h1>
+      <p class="subtitle">Paste an RSS or Atom feed URL and render it as HTML.</p>
+      <form action="/render" method="post" class="feed-form">
+        <label for="url">Feed URL</label>
+        <div class="input-row">
+          <input
+            type="url"
+            id="url"
+            name="url"
+            placeholder="https://example.com/feed.xml"
+            required
+            autofocus
+          >
+          <button type="submit">Render</button>
+        </div>
+      </form>
+      <p class="hint">Supports RSS 2.0, RSS 1.0, and Atom feeds.</p>
+    </div>
+  </main>
+</body>
+</html>

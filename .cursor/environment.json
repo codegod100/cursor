@@ -1,0 +1,16 @@
+{
+  "name": "Feed Renderer",
+  "install": "cd feed-renderer && npm install",
+  "terminals": [
+    {
+      "name": "feed-renderer",
+      "command": "cd feed-renderer && npm start"
+    }
+  ],
+  "ports": [
+    {
+      "name": "feed-renderer",
+      "port": 3456
+    }
+  ]
+}
