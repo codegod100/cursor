@@ -3,7 +3,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMotherDuckConfigured, withClient } from "./lib/motherduck.js";
-import { loadSecrets } from "./lib/secrets.js";
+import { isOpenBaoConfigured, loadSecrets } from "./lib/secrets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -18,7 +18,7 @@ app.get("/api/health", (_req, res) => {
     status: "ok",
     database: process.env.MOTHERDUCK_DB ?? "sample_data",
     motherduckConfigured: isMotherDuckConfigured(),
-    openbaoTokenPresent: Boolean(process.env.OPENBAO_TOKEN),
+    openbaoConfigured: isOpenBaoConfigured(),
     openbaoAddressConfigured: Boolean(
       process.env.OPENBAO_ADDR ?? process.env.BAO_ADDR ?? process.env.VAULT_ADDR
     ),
@@ -92,9 +92,13 @@ app.get("/api/stats", requireMotherDuck, async (req, res) => {
 async function start() {
   try {
     const secretStatus = await loadSecrets();
-    console.log(`Secrets loaded from ${secretStatus.source}`);
+    if (secretStatus.error) {
+      console.warn(`OpenBao secret load: ${secretStatus.error}`);
+    } else {
+      console.log(`Secrets loaded from ${secretStatus.source}`);
+    }
   } catch (error) {
-    console.error("Failed to load secrets from OpenBao:", error.message);
+    console.warn("Failed to load secrets:", error.message);
   }
 
   app.listen(port, () => {

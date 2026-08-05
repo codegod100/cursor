@@ -1,4 +1,6 @@
-import { fetchSecretFromOpenBao } from "./openbao.js";
+import { fetchSecretFromOpenBao, isOpenBaoConfigured } from "./openbao.js";
+
+export { isOpenBaoConfigured };
 
 let motherduckToken = process.env.MOTHERDUCK_TOKEN ?? null;
 
@@ -15,12 +17,15 @@ export async function loadSecrets() {
     return { source: "environment", configured: true };
   }
 
-  if (!process.env.OPENBAO_TOKEN) {
+  if (!isOpenBaoConfigured()) {
     return { source: "none", configured: false };
   }
 
-  motherduckToken = await fetchSecretFromOpenBao("MOTHERDUCK_TOKEN");
-  process.env.MOTHERDUCK_TOKEN = motherduckToken;
-
-  return { source: "openbao", configured: true };
+  try {
+    motherduckToken = await fetchSecretFromOpenBao("MOTHERDUCK_TOKEN");
+    process.env.MOTHERDUCK_TOKEN = motherduckToken;
+    return { source: "openbao", configured: true };
+  } catch (error) {
+    return { source: "openbao", configured: false, error: error.message };
+  }
 }
