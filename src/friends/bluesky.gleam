@@ -14,8 +14,13 @@ import gleam/uri
 
 pub const api_host = "public.api.bsky.app"
 
-pub type ReplyTo {
-  ReplyTo(text: String, author_handle: String, author_name: Option(String))
+/// Parent of a reply or the post embedded in a quote.
+pub type ReferencedPost {
+  ReferencedPost(
+    text: String,
+    author_handle: String,
+    author_name: Option(String),
+  )
 }
 
 pub type Post {
@@ -26,7 +31,8 @@ pub type Post {
     author_handle: String,
     author_name: Option(String),
     web_url: String,
-    reply_to: Option(ReplyTo),
+    reply_to: Option(ReferencedPost),
+    quote_of: Option(ReferencedPost),
   )
 }
 
@@ -77,40 +83,77 @@ fn decode_feed(body: String, fallback_handle: String) -> Result(List(Post), Stri
     decode.success(#(text, created_at))
   }
 
-  let post_view_decoder = {
-    use uri <- decode.field("uri", decode.string)
-    use record <- decode.field("record", record_decoder)
+  let referenced_post_decoder = {
     use author <- decode.field("author", author_decoder)
-    let #(text, created_at) = record
+    use text <- decode.field("value", {
+      use text <- decode.field("text", decode.string)
+      decode.success(text)
+    })
     let #(handle, display_name) = author
-    decode.success(#(uri, text, created_at, handle, display_name))
+    decode.success(ReferencedPost(
+      text: text,
+      author_handle: handle,
+      author_name: display_name,
+    ))
+  }
+
+  // Reply parents use record.text; quote embeds use value.text.
+  let reply_parent_decoder = {
+    use author <- decode.field("author", author_decoder)
+    use text <- decode.field("record", {
+      use text <- decode.field("text", decode.string)
+      decode.success(text)
+    })
+    let #(handle, display_name) = author
+    decode.success(ReferencedPost(
+      text: text,
+      author_handle: handle,
+      author_name: display_name,
+    ))
   }
 
   let reply_to_decoder =
     decode.one_of(
       {
-        use parent <- decode.field("parent", {
-          use record <- decode.field("record", {
-            use text <- decode.field("text", decode.string)
-            decode.success(text)
-          })
-          use author <- decode.field("author", author_decoder)
-          let #(handle, display_name) = author
-          decode.success(ReplyTo(
-            text: record,
-            author_handle: handle,
-            author_name: display_name,
-          ))
-        })
+        use parent <- decode.field("parent", reply_parent_decoder)
         decode.success(Some(parent))
       },
       or: [decode.success(None)],
     )
 
+  // quote: embed.record (record#view) or embed.record.record (recordWithMedia#view)
+  let quote_of_decoder =
+    decode.one_of(
+      {
+        use record <- decode.field("record", referenced_post_decoder)
+        decode.success(Some(record))
+      },
+      or: [
+        {
+          use record <- decode.field("record", {
+            use inner <- decode.field("record", referenced_post_decoder)
+            decode.success(inner)
+          })
+          decode.success(Some(record))
+        },
+        decode.success(None),
+      ],
+    )
+
+  let post_view_decoder = {
+    use uri <- decode.field("uri", decode.string)
+    use record <- decode.field("record", record_decoder)
+    use author <- decode.field("author", author_decoder)
+    use quote_of <- decode.optional_field("embed", None, quote_of_decoder)
+    let #(text, created_at) = record
+    let #(handle, display_name) = author
+    decode.success(#(uri, text, created_at, handle, display_name, quote_of))
+  }
+
   let item_decoder = {
     use post <- decode.field("post", post_view_decoder)
     use reply_to <- decode.optional_field("reply", None, reply_to_decoder)
-    let #(uri, text, created_at, handle, display_name) = post
+    let #(uri, text, created_at, handle, display_name, quote_of) = post
     decode.success(Post(
       uri: uri,
       text: text,
@@ -119,6 +162,7 @@ fn decode_feed(body: String, fallback_handle: String) -> Result(List(Post), Stri
       author_name: display_name,
       web_url: post_url(handle, uri),
       reply_to: reply_to,
+      quote_of: quote_of,
     ))
   }
 

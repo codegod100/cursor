@@ -1,6 +1,6 @@
 //// Unified Atom feed generation from followed Bluesky handles.
 
-import friends/bluesky.{type Post, type ReplyTo}
+import friends/bluesky.{type Post, type ReferencedPost}
 import friends/config.{type Config}
 import friends/html
 import friends/store.{type Store, all_handles}
@@ -98,26 +98,29 @@ fn render_entry(post: Post) -> String {
   <> "</entry>"
 }
 
-/// HTML body for an Atom entry. Replies include the parent post.
+/// HTML body for an Atom entry. Replies and quotes include the original post.
 pub fn entry_content_html(post: Post) -> String {
-  case post.reply_to {
-    None -> "<p>" <> html.escape_text(post.text) <> "</p>"
-    Some(original) ->
-      reply_blockquote(original)
-      <> "<p>"
-      <> html.escape_text(post.text)
-      <> "</p>"
-  }
+  let context =
+    case post.reply_to {
+      Some(original) -> context_blockquote("In reply to ", original)
+      None -> ""
+    }
+    <> case post.quote_of {
+      Some(original) -> context_blockquote("Quoting ", original)
+      None -> ""
+    }
+
+  context <> "<p>" <> html.escape_text(post.text) <> "</p>"
 }
 
-fn reply_blockquote(original: ReplyTo) -> String {
+fn context_blockquote(prefix: String, original: ReferencedPost) -> String {
   let label = case original.author_name {
     Some(name) -> name <> " (@" <> original.author_handle <> ")"
     None -> "@" <> original.author_handle
   }
 
   "<blockquote><p><strong>"
-  <> html.escape_text("In reply to " <> label)
+  <> html.escape_text(prefix <> label)
   <> "</strong></p><p>"
   <> html.escape_text(original.text)
   <> "</p></blockquote>"
@@ -130,10 +133,12 @@ fn entry_title(post: Post) -> String {
     False -> trimmed
   }
 
-  case post.reply_to, base {
-    Some(_), "" -> "Reply"
-    Some(_), text -> "Re: " <> text
-    None, text -> text
+  case post.reply_to, post.quote_of, base {
+    Some(_), _, "" -> "Reply"
+    Some(_), _, text -> "Re: " <> text
+    None, Some(_), "" -> "Quote"
+    None, Some(_), text -> "QT: " <> text
+    None, None, text -> text
   }
 }
 

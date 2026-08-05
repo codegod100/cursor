@@ -1,5 +1,5 @@
 import friends/auth
-import friends/bluesky.{Post, ReplyTo}
+import friends/bluesky.{Post, ReferencedPost}
 import friends/config
 import friends/feed
 import friends/pending as friends_pending
@@ -132,11 +132,12 @@ pub fn atom_reply_body_includes_original_test() {
       author_handle: "nandi.uk",
       author_name: Some("nandi"),
       web_url: "https://bsky.app/profile/nandi.uk/post/reply",
-      reply_to: Some(ReplyTo(
+      reply_to: Some(ReferencedPost(
         text: "ATProto webcomics what/how",
         author_handle: "danhon.com",
         author_name: None,
       )),
+      quote_of: None,
     )
 
   let html = feed.entry_content_html(post)
@@ -145,6 +146,32 @@ pub fn atom_reply_body_includes_original_test() {
   string_contains(html, "ATProto webcomics what/how")
   |> should.be_true
   string_contains(html, "pretty much")
+  |> should.be_true
+}
+
+pub fn atom_quote_body_includes_original_test() {
+  let post =
+    Post(
+      uri: "at://did:example/app.bsky.feed.post/quote",
+      text: "THIS",
+      created_at: "2026-08-05T00:00:00.000Z",
+      author_handle: "nandi.uk",
+      author_name: Some("nandi"),
+      web_url: "https://bsky.app/profile/nandi.uk/post/quote",
+      reply_to: None,
+      quote_of: Some(ReferencedPost(
+        text: "I'm not in a bubble, I'm in a friends group",
+        author_handle: "quillmatiq.com",
+        author_name: Some("Anuj Ahooja"),
+      )),
+    )
+
+  let html = feed.entry_content_html(post)
+  string_contains(html, "Quoting Anuj Ahooja (@quillmatiq.com)")
+  |> should.be_true
+  string_contains(html, "I'm not in a bubble, I'm in a friends group")
+  |> should.be_true
+  string_contains(html, "THIS")
   |> should.be_true
 }
 
