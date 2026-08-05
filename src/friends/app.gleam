@@ -4,22 +4,16 @@ import friends/auth
 import friends/config.{type Config}
 import friends/feed
 import friends/html
-import friends/http_adapter
 import friends/session
 import friends/store
 import friends/views/home
-import gleam/http
 import gleam/bit_array
+import gleam/http
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/uri
-import lightspeed/framework/controller
-import lightspeed/framework/endpoint
-import lightspeed/framework/http as ls_http
-import lightspeed/framework/verified_routes as routes
-import lightspeed/transport/contract
 import wisp
 
 pub type App {
@@ -32,7 +26,8 @@ pub fn new(config: Config) -> App {
 
 pub fn handle(app: App, request: wisp.Request) -> wisp.Response {
   case request.method, request.path {
-    // Auth routes bypass Lightspeed so multiple Set-Cookie headers are preserved.
+    http.Get, "/" -> serve_home(app, request)
+    http.Get, "/feed.atom" -> serve_feed(app, request)
     http.Get, "/auth/login" -> auth_login(app, request)
     http.Get, "/auth/callback" -> auth_callback(app, request)
     http.Get, "/auth/logout" -> auth.logout(request)
@@ -40,10 +35,10 @@ pub fn handle(app: App, request: wisp.Request) -> wisp.Response {
     http.Post, path -> {
       case is_delete_handle_path(path) {
         True -> delete_handle(app, request, path)
-        False -> dispatch_lightspeed(app, request)
+        False -> wisp.not_found()
       }
     }
-    _, _ -> dispatch_lightspeed(app, request)
+    _, _ -> wisp.not_found()
   }
 }
 
@@ -51,51 +46,38 @@ fn is_delete_handle_path(path: String) -> Bool {
   string.starts_with(path, "/handles/") && string.ends_with(path, "/delete")
 }
 
-fn dispatch_lightspeed(app: App, request: wisp.Request) -> wisp.Response {
-  let lightspeed_request = http_adapter.from_wisp(request)
-  let lightspeed_response =
-    endpoint.call(endpoint_for(app, request), lightspeed_request)
-  http_adapter.to_wisp(request, lightspeed_response)
-}
-
-fn endpoint_for(app: App, request: wisp.Request) -> endpoint.Endpoint {
-  let flash = read_flash(request)
-
-  endpoint.new(auth_hook(), app.config.websocket_path)
-  |> endpoint.get_live(routes.route0("/"), "home", fn(_conn) {
+fn serve_home(app: App, request: wisp.Request) -> wisp.Response {
+  let body =
     home.render(
       app.config,
       session.read(request),
       store.open(app.config.data_path),
-      flash,
+      read_flash(request),
     )
-  })
-  |> endpoint.get_controller(routes.route0("/feed.atom"), fn(conn) {
-    serve_feed(app, conn, request)
-  })
+
+  wisp.html_response(body, 200)
+  |> clear_flash(request)
 }
 
-fn auth_hook() -> contract.AuthHook {
-  contract.allow_all("friends")
-}
-
-fn serve_feed(app: App, conn: ls_http.Conn, request: wisp.Request) -> ls_http.Conn {
+fn serve_feed(app: App, request: wisp.Request) -> wisp.Response {
   case session.read(request) {
-    None -> controller.redirect(conn, "/auth/login")
+    None -> wisp.redirect("/auth/login")
     Some(user) -> {
       let current = store.open(app.config.data_path)
       case feed.build_atom(app.config, current, user.sub) {
         Ok(body) ->
-          ls_http.send(
-            conn,
-            200,
+          wisp.response(200)
+          |> wisp.set_header(
+            "content-type",
             "application/atom+xml; charset=utf-8",
-            body,
           )
-          |> ls_http.put_header("cache-control", "public, max-age=300")
+          |> wisp.set_header("cache-control", "public, max-age=300")
+          |> wisp.set_body(wisp.Text(body))
 
         Error(reason) ->
-          ls_http.send(conn, 400, "text/plain; charset=utf-8", reason)
+          wisp.response(400)
+          |> wisp.set_header("content-type", "text/plain; charset=utf-8")
+          |> wisp.set_body(wisp.Text(reason))
       }
     }
   }
@@ -185,6 +167,13 @@ fn read_flash(request: wisp.Request) -> Option(String) {
   case wisp.get_cookie(request, "friends_flash", wisp.Signed) {
     Ok(message) -> Some(message)
     Error(_) -> None
+  }
+}
+
+fn clear_flash(response: wisp.Response, request: wisp.Request) -> wisp.Response {
+  case wisp.get_cookie(request, "friends_flash", wisp.Signed) {
+    Ok(_) -> wisp.set_cookie(response, request, "friends_flash", "", wisp.Signed, 0)
+    Error(_) -> response
   }
 }
 

@@ -12,6 +12,7 @@ import gleam/result
 import gleam/string
 import gleam/uri
 import friends/config.{type Config, authorize_url, token_url}
+import friends/html
 import friends/session.{type UserSession, UserSession, clear, write}
 import wisp
 
@@ -19,26 +20,26 @@ pub const state_cookie = "friends_oauth_state"
 
 pub const state_cookie_max_age = 600
 
-/// Begin login by setting the OAuth state cookie on a same-origin 200 response,
-/// then bounce to the identity provider via meta-refresh.
+/// Begin login by setting the OAuth state cookie on a same-origin 200 page
+/// that requires a click before leaving for Pocket ID.
 ///
-/// Setting the cookie on a cross-site 303 (directly to Pocket ID) is unreliable:
-/// browsers' redirect-tracking mitigations often drop that cookie before the
-/// callback, which surfaces as "missing oauth state cookie".
+/// Do not auto-redirect: browsers' bounce-tracking mitigations drop cookies
+/// set on pages that immediately navigate away in a redirect chain.
 pub fn login_redirect(config: Config, request: wisp.Request) -> wisp.Response {
   let state = random_token()
   let location = idp_authorize_location(config, state)
   let body =
-    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-    <> "<meta http-equiv=\"refresh\" content=\"0;url="
-    <> html_attr(location)
-    <> "\">"
-    <> "<title>Redirecting…</title></head><body>"
-    <> "<p>Redirecting to sign in… "
-    <> "<a href=\""
-    <> html_attr(location)
-    <> "\">Continue</a></p>"
-    <> "</body></html>"
+    html.page(
+      "Continue to sign in",
+      "<header><h1>Friends</h1></header>"
+        <> "<p>Continue to Pocket ID to finish signing in.</p>"
+        <> "<p><a class=\"btn\" href=\""
+        <> html.escape_attr(location)
+        <> "\">Continue to Pocket ID</a></p>"
+        <> "<p class=\"meta\">Identity provider: "
+        <> html.escape_text(config.oidc_issuer)
+        <> "</p>",
+    )
 
   wisp.html_response(body, 200)
   |> wisp.set_cookie(
@@ -67,31 +68,28 @@ pub fn callback(
   use sub <- result.try(token_subject(token_body))
   let name = token_name(token_body)
   let user = UserSession(sub: sub, name: name)
-  // Set the session cookie on a same-origin 200 bounce, not a 303.
-  // The callback arrives via a cross-site redirect from Pocket ID; browsers'
-  // bounce-tracking mitigations often drop cookies set on the subsequent 303
-  // to "/", which shows up as: sign-in works once, then refresh returns to
-  // the guest page.
+  // Set the session cookie on a same-origin 200 page and require a click
+  // before navigating home. Auto meta-refresh/303 after the IdP return is
+  // treated as a bounce; browsers then drop friends_session, which looks like
+  // a sign-in loop on refresh.
   let response =
-    post_login_bounce("/")
+    post_login_continue("/")
     |> write(request, user)
     |> clear_state_cookie(request)
 
   Ok(#(user, response))
 }
 
-fn post_login_bounce(location: String) -> wisp.Response {
+fn post_login_continue(location: String) -> wisp.Response {
   let body =
-    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-    <> "<meta http-equiv=\"refresh\" content=\"0;url="
-    <> html_attr(location)
-    <> "\">"
-    <> "<title>Signed in…</title></head><body>"
-    <> "<p>Signed in. "
-    <> "<a href=\""
-    <> html_attr(location)
-    <> "\">Continue</a></p>"
-    <> "</body></html>"
+    html.page(
+      "Signed in",
+      "<header><h1>Friends</h1></header>"
+        <> "<p>You are signed in.</p>"
+        <> "<p><a class=\"btn\" href=\""
+        <> html.escape_attr(location)
+        <> "\">Continue to Friends</a></p>",
+    )
 
   wisp.html_response(body, 200)
 }
@@ -258,8 +256,9 @@ fn token_name(body: String) -> Option(String) {
 
 fn preferred_username(body: String) -> Option(String) {
   let decoder = {
-    use name <- decode.field(
+    use name <- decode.optional_field(
       "preferred_username",
+      None,
       decode.optional(decode.string),
     )
     decode.success(name)
@@ -273,7 +272,11 @@ fn preferred_username(body: String) -> Option(String) {
 
 fn name_claim(body: String) -> Option(String) {
   let decoder = {
-    use name <- decode.field("name", decode.optional(decode.string))
+    use name <- decode.optional_field(
+      "name",
+      None,
+      decode.optional(decode.string),
+    )
     decode.success(name)
   }
 
@@ -358,13 +361,6 @@ fn base64url_to_base64(value: String) -> String {
   }
 
   replaced <> padding
-}
-
-fn html_attr(value: String) -> String {
-  value
-  |> string.replace(each: "&", with: "&amp;")
-  |> string.replace(each: "\"", with: "&quot;")
-  |> string.replace(each: "<", with: "&lt;")
 }
 
 @external(erlang, "crypto", "strong_rand_bytes")

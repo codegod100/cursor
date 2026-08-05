@@ -1,9 +1,12 @@
 import friends/session.{UserSession}
 import friends/store
+import gleam/http
 import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
 import simplifile
+import wisp
+import wisp/simulate
 
 pub fn main() -> Nil {
   gleeunit.main()
@@ -27,6 +30,21 @@ pub fn session_decode_missing_name_test() {
   let assert Ok(decoded) = session.decode("{\"sub\":\"user-3\"}")
   decoded
   |> should.equal(UserSession(sub: "user-3", name: None))
+}
+
+pub fn session_cookie_survives_follow_up_request_test() {
+  let user = UserSession(sub: "user-4", name: Some("Ada"))
+  let request = simulate.browser_request(http.Get, "/auth/callback")
+  let response =
+    wisp.response(200)
+    |> session.write(request, user)
+
+  let next =
+    simulate.browser_request(http.Get, "/")
+    |> simulate.session(request, response)
+
+  session.read(next)
+  |> should.equal(Some(user))
 }
 
 pub fn normalize_handle_strips_at_sign_test() {
