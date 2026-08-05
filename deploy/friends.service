@@ -1,0 +1,15 @@
+[Unit]
+Description=Friends unified Bluesky Atom feed
+After=network.target
+
+[Service]
+Type=simple
+User=boxd
+WorkingDirectory=/home/boxd/friends
+EnvironmentFile=-/home/boxd/friends/.env
+ExecStart=/bin/bash -lc 'exec mise exec -- gleam run'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -9,7 +9,7 @@ import gleam/string
 pub const default_issuer =
   "https://id.openbao.boxd/v1/identity/oidc/provider/default"
 
-pub const default_port = 8080
+pub const default_port = 8000
 
 pub const session_cookie = "friends_session"
 
