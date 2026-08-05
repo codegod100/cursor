@@ -1,0 +1,4 @@
+{
+  "name": "cursor skills & sticker-icons",
+  "install": "pip install --user -r requirements.txt"
+}

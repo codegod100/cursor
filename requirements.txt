@@ -1,0 +1,3 @@
+# Runtime dependency for the sticker-icons post-processor
+# (.cursor/skills/sticker-icons/scripts/postprocess.py)
+pillow>=10
