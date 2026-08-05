@@ -95,6 +95,10 @@ async function start() {
     const secretStatus = await loadSecrets();
     if (secretStatus.error) {
       console.warn(`Secret load: ${secretStatus.error}`);
+      console.warn(
+        "Create motherduck-app/.motherduck-token with your MotherDuck token, " +
+          "or add MOTHERDUCK_TOKEN as a Cursor Runtime Secret and restart the agent."
+      );
     } else {
       console.log(`Secrets loaded from ${secretStatus.source}`);
     }
