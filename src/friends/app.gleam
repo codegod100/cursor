@@ -10,7 +10,6 @@ import friends/store
 import friends/views/home
 import gleam/http
 import gleam/bit_array
-import gleam/http/response
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
