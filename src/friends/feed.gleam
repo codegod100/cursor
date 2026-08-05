@@ -1,6 +1,6 @@
 //// Unified Atom feed generation from followed Bluesky handles.
 
-import friends/bluesky.{type Post}
+import friends/bluesky.{type Post, type ReplyTo}
 import friends/config.{type Config}
 import friends/html
 import friends/store.{type Store, all_handles}
@@ -93,16 +93,47 @@ fn render_entry(post: Post) -> String {
   <> html.escape_text(author)
   <> "</name></author>"
   <> "<content type=\"html\">"
-  <> html.escape_text(post.text)
+  <> entry_content_html(post)
   <> "</content>"
   <> "</entry>"
 }
 
+/// HTML body for an Atom entry. Replies include the parent post.
+pub fn entry_content_html(post: Post) -> String {
+  case post.reply_to {
+    None -> "<p>" <> html.escape_text(post.text) <> "</p>"
+    Some(original) ->
+      reply_blockquote(original)
+      <> "<p>"
+      <> html.escape_text(post.text)
+      <> "</p>"
+  }
+}
+
+fn reply_blockquote(original: ReplyTo) -> String {
+  let label = case original.author_name {
+    Some(name) -> name <> " (@" <> original.author_handle <> ")"
+    None -> "@" <> original.author_handle
+  }
+
+  "<blockquote><p><strong>"
+  <> html.escape_text("In reply to " <> label)
+  <> "</strong></p><p>"
+  <> html.escape_text(original.text)
+  <> "</p></blockquote>"
+}
+
 fn entry_title(post: Post) -> String {
   let trimmed = string.trim(post.text)
-  case string.length(trimmed) > 80 {
+  let base = case string.length(trimmed) > 80 {
     True -> string.slice(trimmed, 0, 77) <> "..."
     False -> trimmed
+  }
+
+  case post.reply_to, base {
+    Some(_), "" -> "Reply"
+    Some(_), text -> "Re: " <> text
+    None, text -> text
   }
 }
 

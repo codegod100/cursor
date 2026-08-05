@@ -7,12 +7,16 @@ import gleam/httpc
 import gleam/int
 import gleam/json
 import gleam/list
-import gleam/option.{type Option}
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/uri
 
 pub const api_host = "public.api.bsky.app"
+
+pub type ReplyTo {
+  ReplyTo(text: String, author_handle: String, author_name: Option(String))
+}
 
 pub type Post {
   Post(
@@ -22,6 +26,7 @@ pub type Post {
     author_handle: String,
     author_name: Option(String),
     web_url: String,
+    reply_to: Option(ReplyTo),
   )
 }
 
@@ -58,7 +63,11 @@ fn send_get(path: String) -> Result(String, Nil) {
 fn decode_feed(body: String, fallback_handle: String) -> Result(List(Post), String) {
   let author_decoder = {
     use handle <- decode.field("handle", decode.string)
-    use display_name <- decode.field("displayName", decode.optional(decode.string))
+    use display_name <- decode.optional_field(
+      "displayName",
+      None,
+      decode.optional(decode.string),
+    )
     decode.success(#(handle, display_name))
   }
 
@@ -68,12 +77,40 @@ fn decode_feed(body: String, fallback_handle: String) -> Result(List(Post), Stri
     decode.success(#(text, created_at))
   }
 
-  let post_decoder = {
+  let post_view_decoder = {
     use uri <- decode.field("uri", decode.string)
     use record <- decode.field("record", record_decoder)
     use author <- decode.field("author", author_decoder)
     let #(text, created_at) = record
     let #(handle, display_name) = author
+    decode.success(#(uri, text, created_at, handle, display_name))
+  }
+
+  let reply_to_decoder =
+    decode.one_of(
+      {
+        use parent <- decode.field("parent", {
+          use record <- decode.field("record", {
+            use text <- decode.field("text", decode.string)
+            decode.success(text)
+          })
+          use author <- decode.field("author", author_decoder)
+          let #(handle, display_name) = author
+          decode.success(ReplyTo(
+            text: record,
+            author_handle: handle,
+            author_name: display_name,
+          ))
+        })
+        decode.success(Some(parent))
+      },
+      or: [decode.success(None)],
+    )
+
+  let item_decoder = {
+    use post <- decode.field("post", post_view_decoder)
+    use reply_to <- decode.optional_field("reply", None, reply_to_decoder)
+    let #(uri, text, created_at, handle, display_name) = post
     decode.success(Post(
       uri: uri,
       text: text,
@@ -81,12 +118,8 @@ fn decode_feed(body: String, fallback_handle: String) -> Result(List(Post), Stri
       author_handle: handle,
       author_name: display_name,
       web_url: post_url(handle, uri),
+      reply_to: reply_to,
     ))
-  }
-
-  let item_decoder = {
-    use post <- decode.field("post", post_decoder)
-    decode.success(post)
   }
 
   let decoder = {
