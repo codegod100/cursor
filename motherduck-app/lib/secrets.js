@@ -1,19 +1,32 @@
-import { fetchSecretFromOpenBao, isOpenBaoFetchConfigured } from "./openbao.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-export { isOpenBaoFetchConfigured as isOpenBaoConfigured };
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const appRoot = path.resolve(__dirname, "..");
+const defaultTokenFile = path.join(appRoot, ".motherduck-token");
 
-let motherduckToken = process.env.MOTHERDUCK_TOKEN ?? null;
+let motherduckToken = null;
+let tokenFilePath = null;
 let lastLoadResult = null;
 
-function getInjectedSecretNames() {
-  const raw =
-    process.env.CLOUD_AGENT_INJECTED_SECRET_NAMES ??
-    process.env.CLOUD_AGENT_ALL_SECRET_NAMES ??
-    "";
-  return raw
-    .split(",")
-    .map((name) => name.trim())
-    .filter(Boolean);
+function resolveTokenFilePath() {
+  const configured = process.env.MOTHERDUCK_TOKEN_FILE;
+  if (configured) {
+    return path.isAbsolute(configured)
+      ? configured
+      : path.resolve(appRoot, configured);
+  }
+  return defaultTokenFile;
+}
+
+function readTokenFromFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  const value = fs.readFileSync(filePath, "utf8").trim();
+  return value.length > 0 ? value : null;
 }
 
 export function getMotherDuckToken() {
@@ -25,80 +38,48 @@ export function isMotherDuckTokenConfigured() {
 }
 
 export function getSecretDiagnostics() {
-  const injectedSecretNames = getInjectedSecretNames();
   return {
     motherduckTokenPresent: Boolean(motherduckToken),
-    injectedSecretNames,
-    motherduckInjected: injectedSecretNames.includes("MOTHERDUCK_TOKEN"),
-    openbaoTokenPresent: Boolean(process.env.OPENBAO_TOKEN),
-    openbaoFetchConfigured: isOpenBaoFetchConfigured(),
+    tokenFilePath,
+    tokenFileExists: tokenFilePath ? fs.existsSync(tokenFilePath) : false,
     lastLoad: lastLoadResult,
   };
-}
-
-function buildConfigurationError() {
-  const injectedSecretNames = getInjectedSecretNames();
-  const hasOpenBaoToken = Boolean(process.env.OPENBAO_TOKEN);
-  const motherduckInjected = injectedSecretNames.includes("MOTHERDUCK_TOKEN");
-
-  if (motherduckInjected && !motherduckToken) {
-    return "MOTHERDUCK_TOKEN is listed as injected but is not available in the process environment. Restart the Cloud Agent after adding the secret.";
-  }
-
-  if (hasOpenBaoToken && !isOpenBaoFetchConfigured()) {
-    return (
-      "MOTHERDUCK_TOKEN is not injected. OPENBAO_TOKEN is present, but Cursor Cloud Agents do not expose " +
-      "a fetchable OpenBao API in the VM. Add MOTHERDUCK_TOKEN as a Runtime Secret in your Cursor environment " +
-      "so it is injected directly, or set OPENBAO_ADDR if you are using a self-hosted OpenBao server."
-    );
-  }
-
-  if (isOpenBaoFetchConfigured()) {
-    return (
-      "MOTHERDUCK_TOKEN is not set and could not be read from OpenBao. " +
-      "Verify the secret exists at secret/data/MOTHERDUCK_TOKEN and that OPENBAO_TOKEN can read it."
-    );
-  }
-
-  return (
-    "MOTHERDUCK_TOKEN is not configured. Add it as a Runtime Secret in your Cursor environment " +
-    "(https://cursor.com/dashboard/cloud-agents) or set it in .env for local development."
-  );
 }
 
 export function getMotherDuckConfigurationError() {
   if (isMotherDuckTokenConfigured()) {
     return null;
   }
-  return buildConfigurationError();
+
+  return (
+    `MotherDuck token not found. Put your token in ${tokenFilePath ?? defaultTokenFile} ` +
+    "or set MOTHERDUCK_TOKEN in the environment."
+  );
 }
 
 export async function loadSecrets() {
-  if (motherduckToken) {
-    lastLoadResult = { source: "environment", configured: true };
+  tokenFilePath = resolveTokenFilePath();
+
+  const fromEnv = process.env.MOTHERDUCK_TOKEN?.trim();
+  if (fromEnv) {
+    motherduckToken = fromEnv;
+    lastLoadResult = { source: "environment", configured: true, tokenFilePath };
     return lastLoadResult;
   }
 
-  if (!isOpenBaoFetchConfigured()) {
-    lastLoadResult = {
-      source: "none",
-      configured: false,
-      error: buildConfigurationError(),
-    };
+  const fromFile = readTokenFromFile(tokenFilePath);
+  if (fromFile) {
+    motherduckToken = fromFile;
+    process.env.MOTHERDUCK_TOKEN = fromFile;
+    lastLoadResult = { source: "file", configured: true, tokenFilePath };
     return lastLoadResult;
   }
 
-  try {
-    motherduckToken = await fetchSecretFromOpenBao("MOTHERDUCK_TOKEN");
-    process.env.MOTHERDUCK_TOKEN = motherduckToken;
-    lastLoadResult = { source: "openbao", configured: true };
-    return lastLoadResult;
-  } catch (error) {
-    lastLoadResult = {
-      source: "openbao",
-      configured: false,
-      error: error.message,
-    };
-    return lastLoadResult;
-  }
+  lastLoadResult = {
+    source: "none",
+    configured: false,
+    tokenFilePath,
+    error: getMotherDuckConfigurationError(),
+  };
+  return lastLoadResult;
 }

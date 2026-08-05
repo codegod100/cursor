@@ -94,7 +94,7 @@ async function start() {
   try {
     const secretStatus = await loadSecrets();
     if (secretStatus.error) {
-      console.warn(`OpenBao secret load: ${secretStatus.error}`);
+      console.warn(`Secret load: ${secretStatus.error}`);
     } else {
       console.log(`Secrets loaded from ${secretStatus.source}`);
     }
