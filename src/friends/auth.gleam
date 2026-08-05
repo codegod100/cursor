@@ -1,14 +1,12 @@
-//// OpenBao OIDC authentication helpers.
+//// Pocket ID OIDC authentication helpers.
 
 import gleam/bit_array
 import gleam/dynamic/decode
 import gleam/http
 import gleam/http/request
-import gleam/http/response
 import gleam/httpc
 import gleam/int
 import gleam/json
-import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
@@ -21,27 +19,42 @@ pub const state_cookie = "friends_oauth_state"
 
 pub const state_cookie_max_age = 600
 
+/// Begin login by setting the OAuth state cookie on a same-origin 200 response,
+/// then bounce to the identity provider via meta-refresh.
+///
+/// Setting the cookie on a cross-site 303 (directly to Pocket ID) is unreliable:
+/// browsers' redirect-tracking mitigations often drop that cookie before the
+/// callback, which surfaces as "missing oauth state cookie".
 pub fn login_redirect(config: Config, request: wisp.Request) -> wisp.Response {
   let state = random_token()
-  let location =
-    authorize_url(config)
-    <> "?"
-    <> uri.query_to_string([
-      #("response_type", "code"),
-      #("client_id", config.oidc_client_id),
-      #("redirect_uri", config.oidc_redirect_uri),
-      #("scope", "openid profile email"),
-      #("state", state),
-    ])
+  let location = idp_authorize_location(config, state)
+  let body =
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+    <> "<meta http-equiv=\"refresh\" content=\"0;url="
+    <> html_attr(location)
+    <> "\">"
+    <> "<title>Redirecting…</title></head><body>"
+    <> "<p>Redirecting to sign in… "
+    <> "<a href=\""
+    <> html_attr(location)
+    <> "\">Continue</a></p>"
+    <> "</body></html>"
 
-  wisp.redirect(location)
-  |> wisp.set_cookie(request, state_cookie, state, wisp.Signed, state_cookie_max_age)
+  wisp.html_response(body, 200)
+  |> wisp.set_cookie(
+    request,
+    state_cookie,
+    state,
+    wisp.Signed,
+    state_cookie_max_age,
+  )
 }
 
 pub fn callback(
   config: Config,
   request: wisp.Request,
 ) -> Result(#(UserSession, wisp.Response), String) {
+  use _ <- result.try(reject_oauth_error(request))
   use code <- result.try(query_param(request, "code"))
   use state <- result.try(query_param(request, "state"))
   use expected_state <- result.try(read_state_cookie(request))
@@ -67,10 +80,59 @@ pub fn logout(request: wisp.Request) -> wisp.Response {
   |> clear(request)
 }
 
+fn idp_authorize_location(config: Config, state: String) -> String {
+  authorize_url(config)
+  <> "?"
+  <> uri.query_to_string([
+    #("response_type", "code"),
+    #("client_id", config.oidc_client_id),
+    #("redirect_uri", config.oidc_redirect_uri),
+    #("scope", "openid profile email"),
+    #("state", state),
+  ])
+}
+
+fn reject_oauth_error(request: wisp.Request) -> Result(Nil, String) {
+  case query_param(request, "error") {
+    Ok(error) -> {
+      let description = case query_param(request, "error_description") {
+        Ok(value) -> ": " <> value
+        Error(_) -> ""
+      }
+      Error("identity provider returned " <> error <> description)
+    }
+    Error(_) -> Ok(Nil)
+  }
+}
+
 fn read_state_cookie(request: wisp.Request) -> Result(String, String) {
   case wisp.get_cookie(request, state_cookie, wisp.Signed) {
     Ok(value) -> Ok(value)
-    Error(_) -> Error("missing oauth state cookie")
+    Error(_) ->
+      case has_cookie_named(request, state_cookie) {
+        True -> Error("oauth state cookie was present but could not be verified")
+        False ->
+          Error(
+            "missing oauth state cookie (try signing in again; if this persists, clear friends.boxd.sh cookies)",
+          )
+      }
+  }
+}
+
+fn has_cookie_named(request: wisp.Request, name: String) -> Bool {
+  request
+  |> request.get_cookies
+  |> list_key_exists(name)
+}
+
+fn list_key_exists(params: List(#(String, String)), key: String) -> Bool {
+  case params {
+    [] -> False
+    [#(name, _), ..rest] ->
+      case name == key {
+        True -> True
+        False -> list_key_exists(rest, key)
+      }
   }
 }
 
@@ -141,7 +203,12 @@ fn exchange_code(config: Config, code: String) -> Result(String, String) {
   case resp.status >= 200 && resp.status < 300 {
     True -> Ok(resp.body)
     False ->
-      Error("token exchange failed with status " <> int.to_string(resp.status))
+      Error(
+        "token exchange failed with status "
+        <> int.to_string(resp.status)
+        <> ": "
+        <> string.slice(resp.body, at_index: 0, length: 200),
+      )
   }
 }
 
@@ -158,6 +225,32 @@ fn token_subject(body: String) -> Result(String, String) {
 }
 
 fn token_name(body: String) -> Option(String) {
+  case preferred_username(body) {
+    Some(value) -> Some(value)
+    None ->
+      case name_claim(body) {
+        Some(value) -> Some(value)
+        None -> id_token_name(body)
+      }
+  }
+}
+
+fn preferred_username(body: String) -> Option(String) {
+  let decoder = {
+    use name <- decode.field(
+      "preferred_username",
+      decode.optional(decode.string),
+    )
+    decode.success(name)
+  }
+
+  case json.parse(body, decoder) {
+    Ok(name) -> name
+    Error(_) -> None
+  }
+}
+
+fn name_claim(body: String) -> Option(String) {
   let decoder = {
     use name <- decode.field("name", decode.optional(decode.string))
     decode.success(name)
@@ -165,6 +258,26 @@ fn token_name(body: String) -> Option(String) {
 
   case json.parse(body, decoder) {
     Ok(name) -> name
+    Error(_) -> None
+  }
+}
+
+fn id_token_name(body: String) -> Option(String) {
+  let decoder = {
+    use token <- decode.field("id_token", decode.string)
+    decode.success(token)
+  }
+
+  case json.parse(body, decoder) {
+    Ok(id_token) ->
+      case decode_jwt_claim(id_token, "preferred_username") {
+        Ok(value) -> Some(value)
+        Error(_) ->
+          case decode_jwt_claim(id_token, "name") {
+            Ok(value) -> Some(value)
+            Error(_) -> None
+          }
+      }
     Error(_) -> None
   }
 }
@@ -180,10 +293,11 @@ fn decode_id_token_subject(body: String) -> Result(String, String) {
     |> result.map_error(fn(_) { "token response did not include a subject" }),
   )
 
-  decode_jwt_subject(id_token)
+  decode_jwt_claim(id_token, "sub")
+  |> result.map_error(fn(_) { "id token payload did not include sub" })
 }
 
-fn decode_jwt_subject(token: String) -> Result(String, String) {
+fn decode_jwt_claim(token: String, claim: String) -> Result(String, Nil) {
   case string.split(token, ".") {
     [_, payload, ..] -> {
       let padded = base64url_to_base64(payload)
@@ -192,19 +306,19 @@ fn decode_jwt_subject(token: String) -> Result(String, String) {
           case bit_array.to_string(bits) {
             Ok(json_string) -> {
               let decoder = {
-                use sub <- decode.field("sub", decode.string)
-                decode.success(sub)
+                use value <- decode.field(claim, decode.string)
+                decode.success(value)
               }
 
               json.parse(json_string, decoder)
-              |> result.map_error(fn(_) { "id token payload did not include sub" })
+              |> result.map_error(fn(_) { Nil })
             }
-            Error(_) -> Error("invalid id token payload")
+            Error(_) -> Error(Nil)
           }
-        Error(_) -> Error("invalid id token payload")
+        Error(_) -> Error(Nil)
       }
     }
-    _ -> Error("invalid id token format")
+    _ -> Error(Nil)
   }
 }
 
@@ -223,6 +337,13 @@ fn base64url_to_base64(value: String) -> String {
   }
 
   replaced <> padding
+}
+
+fn html_attr(value: String) -> String {
+  value
+  |> string.replace(each: "&", with: "&amp;")
+  |> string.replace(each: "\"", with: "&quot;")
+  |> string.replace(each: "<", with: "&lt;")
 }
 
 @external(erlang, "crypto", "strong_rand_bytes")

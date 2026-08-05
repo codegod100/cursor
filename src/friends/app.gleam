@@ -33,6 +33,10 @@ pub fn new(config: Config) -> App {
 
 pub fn handle(app: App, request: wisp.Request) -> wisp.Response {
   case request.method, request.path {
+    // Auth routes bypass Lightspeed so multiple Set-Cookie headers are preserved.
+    http.Get, "/auth/login" -> auth_login(app, request)
+    http.Get, "/auth/callback" -> auth_callback(app, request)
+    http.Get, "/auth/logout" -> auth.logout(request)
     http.Post, "/handles" -> add_handle(app, request)
     http.Post, path -> {
       case is_delete_handle_path(path) {
@@ -70,15 +74,6 @@ fn endpoint_for(app: App, request: wisp.Request) -> endpoint.Endpoint {
   |> endpoint.get_controller(routes.route0("/feed.atom"), fn(conn) {
     serve_feed(app, conn, request)
   })
-  |> endpoint.get_controller(routes.route0("/auth/login"), fn(conn) {
-    login(app, conn, request)
-  })
-  |> endpoint.get_controller(routes.route0("/auth/callback"), fn(conn) {
-    callback(app, conn, request)
-  })
-  |> endpoint.get_controller(routes.route0("/auth/logout"), fn(conn) {
-    logout(conn, request)
-  })
 }
 
 fn auth_hook() -> contract.AuthHook {
@@ -107,31 +102,27 @@ fn serve_feed(app: App, conn: ls_http.Conn, request: wisp.Request) -> ls_http.Co
   }
 }
 
-fn login(app: App, conn: ls_http.Conn, request: wisp.Request) -> ls_http.Conn {
+fn auth_login(app: App, request: wisp.Request) -> wisp.Response {
   case session.read(request) {
-    Some(_) -> controller.redirect(conn, "/")
-    None -> from_wisp_response(conn, auth.login_redirect(app.config, request))
+    Some(_) -> wisp.redirect("/")
+    None -> auth.login_redirect(app.config, request)
   }
 }
 
-fn callback(app: App, conn: ls_http.Conn, request: wisp.Request) -> ls_http.Conn {
+fn auth_callback(app: App, request: wisp.Request) -> wisp.Response {
   case auth.callback(app.config, request) {
-    Ok(#(_user, response)) -> from_wisp_response(conn, response)
+    Ok(#(_user, response)) -> response
     Error(reason) ->
-      controller.html(
-        conn,
+      wisp.html_response(
         html.page(
           "Sign in failed",
           "<p>Could not complete sign in: "
             <> html.escape_text(reason)
             <> "</p><p><a href=\"/auth/login\">Try again</a></p>",
         ),
+        400,
       )
   }
-}
-
-fn logout(conn: ls_http.Conn, request: wisp.Request) -> ls_http.Conn {
-  from_wisp_response(conn, auth.logout(request))
 }
 
 fn add_handle(app: App, request: wisp.Request) -> wisp.Response {
@@ -196,24 +187,6 @@ fn read_flash(request: wisp.Request) -> Option(String) {
     Ok(message) -> Some(message)
     Error(_) -> None
   }
-}
-
-fn from_wisp_response(conn: ls_http.Conn, response: wisp.Response) -> ls_http.Conn {
-  let body = case response.body {
-    wisp.Text(text) -> text
-    wisp.Bytes(_) -> ""
-    wisp.File(..) -> ""
-  }
-
-  let conn =
-    conn
-  |> ls_http.set_status(response.status)
-  |> ls_http.set_body(body)
-
-  list.fold(response.headers, conn, fn(acc, header) {
-    let #(key, value) = header
-    ls_http.put_header(acc, key, value)
-  })
 }
 
 fn parse_form(request: wisp.Request) -> List(#(String, String)) {

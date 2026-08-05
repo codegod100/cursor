@@ -7,6 +7,7 @@ import gleam/http/response
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
+import gleam/string
 import friends/session
 import lightspeed/framework/http as ls_http
 import wisp
@@ -44,9 +45,14 @@ fn set_headers(
   response: wisp.Response,
   headers: List(#(String, String)),
 ) -> wisp.Response {
+  // set-cookie must be prepended: gleam_http set_header replaces by key and
+  // would collapse multiple cookies into one.
   list.fold(headers, response, fn(acc, header) {
     let #(key, value) = header
-    response.set_header(acc, key, value)
+    case string.lowercase(key) {
+      "set-cookie" -> response.prepend_header(acc, "set-cookie", value)
+      _ -> response.set_header(acc, key, value)
+    }
   })
 }
 
