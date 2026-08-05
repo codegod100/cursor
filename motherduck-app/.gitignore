@@ -1,4 +1,5 @@
 node_modules/
 .env
 .motherduck-token
+.openbao-addr
 .DS_Store
