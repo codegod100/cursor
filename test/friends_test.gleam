@@ -119,3 +119,21 @@ pub fn add_and_remove_handle_round_trip_test() {
 
   let _ = simplifile.delete(path)
 }
+
+pub fn all_handles_unions_users_test() {
+  let path = "/tmp/friends-test-handles-all.json"
+  let _ = simplifile.delete(path)
+  let initial = store.open(path)
+
+  let assert Ok(#(with_alice, True)) =
+    store.add_handle(initial, "user-1", "alice.bsky.social")
+  let assert Ok(#(with_both, True)) =
+    store.add_handle(with_alice, "user-2", "bob.bsky.social")
+  let assert Ok(#(with_shared, True)) =
+    store.add_handle(with_both, "user-2", "alice.bsky.social")
+
+  store.all_handles(with_shared)
+  |> should.equal(["alice.bsky.social", "bob.bsky.social"])
+
+  let _ = simplifile.delete(path)
+}

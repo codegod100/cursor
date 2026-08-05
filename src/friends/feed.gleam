@@ -3,34 +3,25 @@
 import friends/bluesky.{type Post}
 import friends/config.{type Config}
 import friends/html
-import friends/store.{type Store, handles}
+import friends/store.{type Store, all_handles}
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
 import gleam/string
 
-pub fn build_atom(
-  config: Config,
-  store: Store,
-  user_id: String,
-) -> Result(String, String) {
-  let followed_handles = handles(store, user_id)
-  case followed_handles {
-    [] -> Error("add at least one Bluesky handle before subscribing to your feed")
-    _ -> {
-      let posts =
-        followed_handles
-        |> list.flat_map(fn(handle) {
-          case bluesky.fetch_author_posts(handle, 25) {
-            Ok(items) -> items
-            Error(_) -> []
-          }
-        })
-        |> sort_posts_newest_first
+/// Public Atom document for every curated handle on this instance.
+pub fn build_public_atom(config: Config, store: Store) -> String {
+  let followed_handles = all_handles(store)
+  let posts =
+    followed_handles
+    |> list.flat_map(fn(handle) {
+      case bluesky.fetch_author_posts(handle, 25) {
+        Ok(items) -> items
+        Error(_) -> []
+      }
+    })
+    |> sort_posts_newest_first
 
-      Ok(render_atom(config, user_id, posts))
-    }
-  }
+  render_atom(config, posts)
 }
 
 fn sort_posts_newest_first(posts: List(Post)) -> List(Post) {
@@ -39,7 +30,7 @@ fn sort_posts_newest_first(posts: List(Post)) -> List(Post) {
   })
 }
 
-fn render_atom(config: Config, user_id: String, posts: List(Post)) -> String {
+fn render_atom(config: Config, posts: List(Post)) -> String {
   let feed_url = config.base_url <> "/feed.atom"
   let updated = case posts {
     [] -> timestamp_now()
@@ -57,13 +48,13 @@ fn render_atom(config: Config, user_id: String, posts: List(Post)) -> String {
   <> html.escape_text("Friends")
   <> "</title>"
   <> "<subtitle>"
-  <> html.escape_text("Unified Bluesky feed")
+  <> html.escape_text("Unified public Bluesky feed")
   <> "</subtitle>"
   <> "<link href=\""
   <> html.escape_attr(feed_url)
   <> "\" rel=\"self\"/>"
   <> "<id>"
-  <> html.escape_text("urn:friends:" <> user_id)
+  <> html.escape_text(feed_url)
   <> "</id>"
   <> "<updated>"
   <> html.escape_text(updated)

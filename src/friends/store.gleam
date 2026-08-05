@@ -31,6 +31,14 @@ pub fn handles(store: Store, user_id: String) -> List(String) {
   |> list.sort(string.compare)
 }
 
+/// Unique handles across every user — used for the public Atom feed.
+pub fn all_handles(store: Store) -> List(String) {
+  dict.values(store.users)
+  |> list.flatten
+  |> list.unique
+  |> list.sort(string.compare)
+}
+
 pub fn add_handle(
   store: Store,
   user_id: String,

@@ -62,8 +62,8 @@ fn render_dashboard(
   <> render_handle_list(user_handles)
   <> "</section>"
   <> "<section>"
-  <> "<h2>Your feed</h2>"
-  <> "<p>Subscribe in any Atom reader:</p>"
+  <> "<h2>Public feed</h2>"
+  <> "<p>Anyone can subscribe in an Atom reader — no sign-in required:</p>"
   <> "<p><a class=\"btn\" href=\"/feed.atom\">"
   <> html.escape_text(config.base_url <> "/feed.atom")
   <> "</a></p>"

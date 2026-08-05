@@ -61,28 +61,14 @@ fn serve_home(app: App, request: wisp.Request) -> wisp.Response {
   |> clear_flash(request)
 }
 
-fn serve_feed(app: App, request: wisp.Request) -> wisp.Response {
-  case session.read(request) {
-    None -> wisp.redirect("/auth/login")
-    Some(user) -> {
-      let current = store.open(app.config.data_path)
-      case feed.build_atom(app.config, current, user.sub) {
-        Ok(body) ->
-          wisp.response(200)
-          |> wisp.set_header(
-            "content-type",
-            "application/atom+xml; charset=utf-8",
-          )
-          |> wisp.set_header("cache-control", "public, max-age=300")
-          |> wisp.set_body(wisp.Text(body))
+fn serve_feed(app: App, _request: wisp.Request) -> wisp.Response {
+  let current = store.open(app.config.data_path)
+  let body = feed.build_public_atom(app.config, current)
 
-        Error(reason) ->
-          wisp.response(400)
-          |> wisp.set_header("content-type", "text/plain; charset=utf-8")
-          |> wisp.set_body(wisp.Text(reason))
-      }
-    }
-  }
+  wisp.response(200)
+  |> wisp.set_header("content-type", "application/atom+xml; charset=utf-8")
+  |> wisp.set_header("cache-control", "public, max-age=300")
+  |> wisp.set_body(wisp.Text(body))
 }
 
 fn auth_login(app: App, request: wisp.Request) -> wisp.Response {
