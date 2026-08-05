@@ -1,6 +1,7 @@
 //// Application routes and request dispatch.
 
 import friends/auth
+import friends/browser
 import friends/config.{type Config}
 import friends/feed
 import friends/html
@@ -55,8 +56,14 @@ fn serve_home(app: App, request: wisp.Request) -> wisp.Response {
       read_flash(request),
     )
 
-  wisp.html_response(body, 200)
-  |> clear_flash(request)
+  // Set the durable browser cookie on a normal page view so OAuth state can
+  // bind to it even when short-lived cookies are dropped mid-login.
+  let #(_browser_id, response) =
+    wisp.html_response(body, 200)
+    |> clear_flash(request)
+    |> browser.ensure(request)
+
+  response
 }
 
 fn serve_feed(app: App, request: wisp.Request) -> wisp.Response {

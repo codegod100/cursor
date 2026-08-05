@@ -1,6 +1,7 @@
 //// Pocket ID OIDC authentication helpers.
 
 import gleam/bit_array
+import gleam/crypto
 import gleam/dynamic/decode
 import gleam/http
 import gleam/http/request
@@ -11,22 +12,24 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/uri
+import friends/browser
 import friends/config.{type Config, authorize_url, token_url}
 import friends/html
 import friends/session.{type UserSession, UserSession, clear, write}
 import wisp
 
-pub const state_cookie = "friends_oauth_state"
+pub const state_max_age_seconds = 600
 
-pub const state_cookie_max_age = 600
-
-/// Begin login by setting the OAuth state cookie on a same-origin 200 page
-/// that requires a click before leaving for Pocket ID.
+/// Begin login with a signed OAuth state bound to the long-lived browser cookie.
 ///
-/// Do not auto-redirect: browsers' bounce-tracking mitigations drop cookies
-/// set on pages that immediately navigate away in a redirect chain.
+/// Short-lived oauth-state cookies are dropped by bounce-tracking when the
+/// browser leaves for Pocket ID. Instead we:
+/// 1. ensure `friends_browser` (ideally already set on `/`)
+/// 2. put a signed `browser_id:nonce:expiry` value in the OAuth `state` param
+/// 3. verify that signature + browser cookie on callback
 pub fn login_redirect(config: Config, request: wisp.Request) -> wisp.Response {
-  let state = random_token()
+  let #(browser_id, with_browser) = browser_binder(request)
+  let state = mint_state(config, browser_id)
   let location = idp_authorize_location(config, state)
   let body =
     html.page(
@@ -42,13 +45,7 @@ pub fn login_redirect(config: Config, request: wisp.Request) -> wisp.Response {
     )
 
   wisp.html_response(body, 200)
-  |> wisp.set_cookie(
-    request,
-    state_cookie,
-    state,
-    wisp.Signed,
-    state_cookie_max_age,
-  )
+  |> with_browser
 }
 
 pub fn callback(
@@ -58,26 +55,87 @@ pub fn callback(
   use _ <- result.try(reject_oauth_error(request))
   use code <- result.try(query_param(request, "code"))
   use state <- result.try(query_param(request, "state"))
-  use expected_state <- result.try(read_state_cookie(request))
-  use _ <- result.try(case state == expected_state {
-    True -> Ok(Nil)
-    False -> Error("invalid oauth state")
-  })
+  use browser_id <- result.try(require_browser_id(request))
+  use _ <- result.try(verify_state(config, state, browser_id))
 
   use token_body <- result.try(exchange_code(config, code))
   use sub <- result.try(token_subject(token_body))
   let name = token_name(token_body)
   let user = UserSession(sub: sub, name: name)
-  // Set the session cookie on a same-origin 200 page and require a click
-  // before navigating home. Auto meta-refresh/303 after the IdP return is
-  // treated as a bounce; browsers then drop friends_session, which looks like
-  // a sign-in loop on refresh.
+  // Keep a click-through continue page so bounce-tracking does not drop the
+  // newly set friends_session cookie.
   let response =
     post_login_continue("/")
     |> write(request, user)
-    |> clear_state_cookie(request)
+    |> browser.write(request, browser_id)
 
   Ok(#(user, response))
+}
+
+/// Create a signed OAuth state for tests and login.
+pub fn mint_state(config: Config, browser_id: String) -> String {
+  let expiry = unix_seconds() + state_max_age_seconds
+  let nonce = random_token()
+  let payload = browser_id <> ":" <> nonce <> ":" <> int.to_string(expiry)
+  crypto.sign_message(
+    <<payload:utf8>>,
+    <<config.secret_key_base:utf8>>,
+    crypto.Sha512,
+  )
+}
+
+/// Verify signed OAuth state for tests and callback.
+pub fn verify_state(
+  config: Config,
+  state: String,
+  browser_id: String,
+) -> Result(Nil, String) {
+  use payload_bits <- result.try(
+    crypto.verify_signed_message(state, <<config.secret_key_base:utf8>>)
+    |> result.map_error(fn(_) { "invalid oauth state signature" }),
+  )
+  use payload <- result.try(
+    bit_array.to_string(payload_bits)
+    |> result.map_error(fn(_) { "invalid oauth state payload" }),
+  )
+
+  case string.split(payload, ":") {
+    [state_browser_id, _nonce, expiry_raw] -> {
+      use expiry <- result.try(
+        int.parse(expiry_raw)
+        |> result.map_error(fn(_) { "invalid oauth state expiry" }),
+      )
+      case state_browser_id == browser_id {
+        False -> Error("oauth state was not issued for this browser")
+        True ->
+          case unix_seconds() <= expiry {
+            True -> Ok(Nil)
+            False -> Error("oauth state expired; try signing in again")
+          }
+      }
+    }
+    _ -> Error("invalid oauth state format")
+  }
+}
+
+fn browser_binder(request: wisp.Request) -> #(String, fn(wisp.Response) -> wisp.Response) {
+  case browser.read(request) {
+    Some(id) -> #(id, fn(response) { response })
+    None -> {
+      let id = browser.new_id()
+      #(id, fn(response) { browser.write(response, request, id) })
+    }
+  }
+}
+
+fn require_browser_id(request: wisp.Request) -> Result(String, String) {
+  case browser.read(request) {
+    Some(id) -> Ok(id)
+    None ->
+      Error(
+        "missing browser cookie (open https://friends.boxd.sh/ once, then sign in again)",
+      )
+  }
 }
 
 fn post_login_continue(location: String) -> wisp.Response {
@@ -122,45 +180,6 @@ fn reject_oauth_error(request: wisp.Request) -> Result(Nil, String) {
     }
     Error(_) -> Ok(Nil)
   }
-}
-
-fn read_state_cookie(request: wisp.Request) -> Result(String, String) {
-  case wisp.get_cookie(request, state_cookie, wisp.Signed) {
-    Ok(value) -> Ok(value)
-    Error(_) ->
-      case has_cookie_named(request, state_cookie) {
-        True -> Error("oauth state cookie was present but could not be verified")
-        False ->
-          Error(
-            "missing oauth state cookie (try signing in again; if this persists, clear friends.boxd.sh cookies)",
-          )
-      }
-  }
-}
-
-fn has_cookie_named(request: wisp.Request, name: String) -> Bool {
-  request
-  |> request.get_cookies
-  |> list_key_exists(name)
-}
-
-fn list_key_exists(params: List(#(String, String)), key: String) -> Bool {
-  case params {
-    [] -> False
-    [#(name, _), ..rest] ->
-      case name == key {
-        True -> True
-        False -> list_key_exists(rest, key)
-      }
-  }
-}
-
-fn clear_state_cookie(
-  response: wisp.Response,
-  request: wisp.Request,
-) -> wisp.Response {
-  response
-  |> wisp.set_cookie(request, state_cookie, "", wisp.Signed, 0)
 }
 
 fn query_param(request: wisp.Request, key: String) -> Result(String, String) {
@@ -365,6 +384,9 @@ fn base64url_to_base64(value: String) -> String {
 
 @external(erlang, "crypto", "strong_rand_bytes")
 fn strong_rand_bytes(count: Int) -> BitArray
+
+@external(erlang, "friends_ffi", "unix_seconds")
+fn unix_seconds() -> Int
 
 fn random_token() -> String {
   strong_rand_bytes(24)

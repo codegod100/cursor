@@ -1,3 +1,5 @@
+import friends/auth
+import friends/config
 import friends/session.{UserSession}
 import friends/store
 import gleam/http
@@ -45,6 +47,31 @@ pub fn session_cookie_survives_follow_up_request_test() {
 
   session.read(next)
   |> should.equal(Some(user))
+}
+
+fn test_config() -> config.Config {
+  config.Config(
+    port: 8000,
+    base_url: "https://friends.boxd.sh",
+    secret_key_base: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    data_path: "data/handles.json",
+    oidc_issuer: "https://id.openbao.boxd.sh",
+    oidc_client_id: "client",
+    oidc_client_secret: "secret",
+    oidc_redirect_uri: "https://friends.boxd.sh/auth/callback",
+    websocket_path: "/live",
+  )
+}
+
+pub fn oauth_state_binds_to_browser_id_test() {
+  let conf = test_config()
+  let state = auth.mint_state(conf, "browser-a")
+
+  auth.verify_state(conf, state, "browser-a")
+  |> should.be_ok
+
+  auth.verify_state(conf, state, "browser-b")
+  |> should.be_error
 }
 
 pub fn normalize_handle_strips_at_sign_test() {
