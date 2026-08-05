@@ -1,5 +1,6 @@
 import friends/auth
 import friends/config
+import friends/pending as friends_pending
 import friends/session.{UserSession}
 import friends/store
 import gleam/http
@@ -63,14 +64,26 @@ fn test_config() -> config.Config {
   )
 }
 
-pub fn oauth_state_binds_to_browser_id_test() {
+pub fn oauth_state_round_trip_test() {
   let conf = test_config()
-  let state = auth.mint_state(conf, "browser-a")
+  let state = auth.mint_state(conf)
 
-  auth.verify_state(conf, state, "browser-a")
+  auth.verify_state(conf, state)
   |> should.be_ok
 
-  auth.verify_state(conf, state, "browser-b")
+  auth.verify_state(conf, state <> "tampered")
+  |> should.be_error
+}
+
+pub fn pending_login_ticket_round_trip_test() {
+  let path = "/tmp/friends-test-handles-pending.json"
+  let user = UserSession(sub: "user-5", name: Some("Ada"))
+  let assert Ok(ticket) = friends_pending.issue(path, user)
+  let assert Ok(taken) = friends_pending.take(path, ticket)
+  taken
+  |> should.equal(user)
+
+  friends_pending.take(path, ticket)
   |> should.be_error
 }
 

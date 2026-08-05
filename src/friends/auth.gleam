@@ -12,24 +12,20 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/uri
-import friends/browser
 import friends/config.{type Config, authorize_url, token_url}
 import friends/html
-import friends/session.{type UserSession, UserSession, clear, write}
+import friends/pending
+import friends/session.{
+  type UserSession, UserSession, clear, display_name, write as write_session,
+}
 import wisp
 
 pub const state_max_age_seconds = 600
 
-/// Begin login with a signed OAuth state bound to the long-lived browser cookie.
-///
-/// Short-lived oauth-state cookies are dropped by bounce-tracking when the
-/// browser leaves for Pocket ID. Instead we:
-/// 1. ensure `friends_browser` (ideally already set on `/`)
-/// 2. put a signed `browser_id:nonce:expiry` value in the OAuth `state` param
-/// 3. verify that signature + browser cookie on callback
-pub fn login_redirect(config: Config, request: wisp.Request) -> wisp.Response {
-  let #(browser_id, with_browser) = browser_binder(request)
-  let state = mint_state(config, browser_id)
+/// Begin login with a signed OAuth `state` param. No cookies required:
+/// bounce-tracking on friends.boxd.sh drops cookies during the IdP round-trip.
+pub fn login_redirect(config: Config, _request: wisp.Request) -> wisp.Response {
+  let state = mint_state(config)
   let location = idp_authorize_location(config, state)
   let body =
     html.page(
@@ -45,38 +41,51 @@ pub fn login_redirect(config: Config, request: wisp.Request) -> wisp.Response {
     )
 
   wisp.html_response(body, 200)
-  |> with_browser
 }
 
 pub fn callback(
   config: Config,
   request: wisp.Request,
-) -> Result(#(UserSession, wisp.Response), String) {
+) -> Result(wisp.Response, String) {
   use _ <- result.try(reject_oauth_error(request))
   use code <- result.try(query_param(request, "code"))
   use state <- result.try(query_param(request, "state"))
-  use browser_id <- result.try(require_browser_id(request))
-  use _ <- result.try(verify_state(config, state, browser_id))
+  use _ <- result.try(verify_state(config, state))
 
   use token_body <- result.try(exchange_code(config, code))
   use sub <- result.try(token_subject(token_body))
   let name = token_name(token_body)
   let user = UserSession(sub: sub, name: name)
-  // Keep a click-through continue page so bounce-tracking does not drop the
-  // newly set friends_session cookie.
-  let response =
-    post_login_continue("/")
-    |> write(request, user)
-    |> browser.write(request, browser_id)
 
-  Ok(#(user, response))
+  // Do not set friends_session on this response — it arrives via a cross-site
+  // redirect from Pocket ID and bounce-tracking drops those cookies. Issue a
+  // one-time server ticket and set the session only after a same-site click.
+  use ticket <- result.try(pending.issue(config.data_path, user))
+  Ok(post_login_continue(user, ticket))
+}
+
+/// Consume a pending ticket and set the session cookie on a same-site 200.
+/// Returns the user so the caller can render the signed-in home page directly
+/// (avoids a further redirect that bounce-tracking might strip cookies from).
+pub fn complete(
+  config: Config,
+  request: wisp.Request,
+) -> Result(#(UserSession, wisp.Response), String) {
+  use ticket <- result.try(query_param(request, "ticket"))
+  use user <- result.try(pending.take(config.data_path, ticket))
+
+  Ok(#(
+    user,
+    wisp.response(200)
+    |> write_session(request, user),
+  ))
 }
 
 /// Create a signed OAuth state for tests and login.
-pub fn mint_state(config: Config, browser_id: String) -> String {
+pub fn mint_state(config: Config) -> String {
   let expiry = unix_seconds() + state_max_age_seconds
   let nonce = random_token()
-  let payload = browser_id <> ":" <> nonce <> ":" <> int.to_string(expiry)
+  let payload = nonce <> ":" <> int.to_string(expiry)
   crypto.sign_message(
     <<payload:utf8>>,
     <<config.secret_key_base:utf8>>,
@@ -85,11 +94,7 @@ pub fn mint_state(config: Config, browser_id: String) -> String {
 }
 
 /// Verify signed OAuth state for tests and callback.
-pub fn verify_state(
-  config: Config,
-  state: String,
-  browser_id: String,
-) -> Result(Nil, String) {
+pub fn verify_state(config: Config, state: String) -> Result(Nil, String) {
   use payload_bits <- result.try(
     crypto.verify_signed_message(state, <<config.secret_key_base:utf8>>)
     |> result.map_error(fn(_) { "invalid oauth state signature" }),
@@ -99,51 +104,30 @@ pub fn verify_state(
     |> result.map_error(fn(_) { "invalid oauth state payload" }),
   )
 
-  case string.split(payload, ":") {
-    [state_browser_id, _nonce, expiry_raw] -> {
+  case string.split_once(payload, ":") {
+    Ok(#(_nonce, expiry_raw)) -> {
       use expiry <- result.try(
         int.parse(expiry_raw)
         |> result.map_error(fn(_) { "invalid oauth state expiry" }),
       )
-      case state_browser_id == browser_id {
-        False -> Error("oauth state was not issued for this browser")
-        True ->
-          case unix_seconds() <= expiry {
-            True -> Ok(Nil)
-            False -> Error("oauth state expired; try signing in again")
-          }
+      case unix_seconds() <= expiry {
+        True -> Ok(Nil)
+        False -> Error("oauth state expired; try signing in again")
       }
     }
-    _ -> Error("invalid oauth state format")
+    Error(_) -> Error("invalid oauth state format")
   }
 }
 
-fn browser_binder(request: wisp.Request) -> #(String, fn(wisp.Response) -> wisp.Response) {
-  case browser.read(request) {
-    Some(id) -> #(id, fn(response) { response })
-    None -> {
-      let id = browser.new_id()
-      #(id, fn(response) { browser.write(response, request, id) })
-    }
-  }
-}
-
-fn require_browser_id(request: wisp.Request) -> Result(String, String) {
-  case browser.read(request) {
-    Some(id) -> Ok(id)
-    None ->
-      Error(
-        "missing browser cookie (open https://friends.boxd.sh/ once, then sign in again)",
-      )
-  }
-}
-
-fn post_login_continue(location: String) -> wisp.Response {
+fn post_login_continue(user: UserSession, ticket: String) -> wisp.Response {
+  let location = "/auth/complete?ticket=" <> uri.percent_encode(ticket)
   let body =
     html.page(
       "Signed in",
       "<header><h1>Friends</h1></header>"
-        <> "<p>You are signed in.</p>"
+        <> "<p>Signed in as "
+        <> html.escape_text(display_name(user))
+        <> ".</p>"
         <> "<p><a class=\"btn\" href=\""
         <> html.escape_attr(location)
         <> "\">Continue to Friends</a></p>",

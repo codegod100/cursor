@@ -1,7 +1,6 @@
 //// Application routes and request dispatch.
 
 import friends/auth
-import friends/browser
 import friends/config.{type Config}
 import friends/feed
 import friends/html
@@ -31,6 +30,7 @@ pub fn handle(app: App, request: wisp.Request) -> wisp.Response {
     http.Get, "/feed.atom" -> serve_feed(app, request)
     http.Get, "/auth/login" -> auth_login(app, request)
     http.Get, "/auth/callback" -> auth_callback(app, request)
+    http.Get, "/auth/complete" -> auth_complete(app, request)
     http.Get, "/auth/logout" -> auth.logout(request)
     http.Post, "/handles" -> add_handle(app, request)
     http.Post, path -> {
@@ -56,14 +56,8 @@ fn serve_home(app: App, request: wisp.Request) -> wisp.Response {
       read_flash(request),
     )
 
-  // Set the durable browser cookie on a normal page view so OAuth state can
-  // bind to it even when short-lived cookies are dropped mid-login.
-  let #(_browser_id, response) =
-    wisp.html_response(body, 200)
-    |> clear_flash(request)
-    |> browser.ensure(request)
-
-  response
+  wisp.html_response(body, 200)
+  |> clear_flash(request)
 }
 
 fn serve_feed(app: App, request: wisp.Request) -> wisp.Response {
@@ -99,18 +93,39 @@ fn auth_login(app: App, request: wisp.Request) -> wisp.Response {
 
 fn auth_callback(app: App, request: wisp.Request) -> wisp.Response {
   case auth.callback(app.config, request) {
-    Ok(#(_user, response)) -> response
-    Error(reason) ->
-      wisp.html_response(
-        html.page(
-          "Sign in failed",
-          "<p>Could not complete sign in: "
-            <> html.escape_text(reason)
-            <> "</p><p><a href=\"/auth/login\">Try again</a></p>",
-        ),
-        400,
-      )
+    Ok(response) -> response
+    Error(reason) -> auth_error(reason)
   }
+}
+
+fn auth_complete(app: App, request: wisp.Request) -> wisp.Response {
+  case auth.complete(app.config, request) {
+    Ok(#(user, response)) -> {
+      let body =
+        home.render(
+          app.config,
+          Some(user),
+          store.open(app.config.data_path),
+          None,
+        )
+      response
+      |> wisp.set_header("content-type", "text/html; charset=utf-8")
+      |> wisp.set_body(wisp.Text(body))
+    }
+    Error(reason) -> auth_error(reason)
+  }
+}
+
+fn auth_error(reason: String) -> wisp.Response {
+  wisp.html_response(
+    html.page(
+      "Sign in failed",
+      "<p>Could not complete sign in: "
+        <> html.escape_text(reason)
+        <> "</p><p><a href=\"/auth/login\">Try again</a></p>",
+    ),
+    400,
+  )
 }
 
 fn add_handle(app: App, request: wisp.Request) -> wisp.Response {
