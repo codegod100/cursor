@@ -1,0 +1,20 @@
+{
+  "name": "motherduck-app",
+  "version": "1.0.0",
+  "description": "Simple web app querying MotherDuck via the Postgres endpoint",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/write-token-from-env.js && node server.js",
+    "dev": "node scripts/write-token-from-env.js && node --watch server.js",
+    "secrets:check": "node scripts/check-secrets.js",
+    "token:write": "node scripts/write-token-from-env.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.3"
+  }
+}
