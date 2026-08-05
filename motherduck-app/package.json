@@ -7,7 +7,6 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "secrets:check": "node scripts/check-secrets.js",
-    "secrets:fetch": "node scripts/fetch-from-openbao.js",
     "token:write": "node scripts/write-token-from-env.js"
   },
   "engines": {

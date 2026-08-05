@@ -20,51 +20,29 @@ The UI reads from MotherDuck's built-in `sample_data.nyc.taxi` dataset, so it wo
 ```bash
 cd motherduck-app
 npm install
-cp .env.example .env
-```
-
-Put your MotherDuck token on disk:
-
-```bash
-echo 'your-token-here' > .motherduck-token
+echo 'your-motherduck-token' > .motherduck-token
 chmod 600 .motherduck-token
-```
-
-Or set `MOTHERDUCK_TOKEN` in `.env`.
-
-```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Secrets
+## Token on disk
 
-The app loads the MotherDuck token in this order:
+The app reads the MotherDuck token from `.motherduck-token` (gitignored) or from the `MOTHERDUCK_TOKEN` environment variable.
 
-1. `MOTHERDUCK_TOKEN` environment variable
-2. Token file (default: `.motherduck-token`)
-3. OpenBao KV fetch using `OPENBAO_TOKEN` + `OPENBAO_ADDR`, then writes the token to disk
-
-### OpenBao (Cursor dashboard)
-
-If `MOTHERDUCK_TOKEN` is stored in OpenBao:
-
-1. `OPENBAO_TOKEN` is injected automatically in Cloud Agents
-2. Also add `OPENBAO_ADDR` as a Cursor secret, **or** create `motherduck-app/.openbao-addr` containing your OpenBao URL
-3. On startup the app fetches `secret/data/MOTHERDUCK_TOKEN` (and an environment-scoped path when available) and saves it to `.motherduck-token`
-
-Fetch manually:
+If `MOTHERDUCK_TOKEN` is injected as a Cursor secret, persist it to disk with:
 
 ```bash
-npm run secrets:fetch
+npm run token:write
+```
+
+Check configuration:
+
+```bash
 npm run secrets:check
 curl http://localhost:3000/api/health
 ```
-
-### Local development
-
-Set `MOTHERDUCK_TOKEN` in `.env`, or put the token in `.motherduck-token`.
 
 ## Environment variables
 
@@ -72,10 +50,7 @@ Set `MOTHERDUCK_TOKEN` in `.env`, or put the token in `.motherduck-token`.
 | --- | --- | --- | --- |
 | `MOTHERDUCK_TOKEN` | No* | — | MotherDuck access token (used as the Postgres password) |
 | `MOTHERDUCK_TOKEN_FILE` | No | `.motherduck-token` | Path to a file containing the token |
-| `OPENBAO_TOKEN` | OpenBao path | — | Token for reading secrets from OpenBao |
-| `OPENBAO_ADDR` | OpenBao path | — | OpenBao server URL (or use `.openbao-addr` file) |
-| `OPENBAO_MOUNT` | No | `secret` | KV mount name |
-| `MOTHERDUCK_HOST` | No | `pg.us-east-1-aws.motherduck.com` | Postgres endpoint host (use EU host for EU orgs) |
+| `MOTHERDUCK_HOST` | No | `pg.us-east-1-aws.motherduck.com` | Postgres endpoint host |
 | `MOTHERDUCK_DB` | No | `sample_data` | Database name |
 | `PORT` | No | `3000` | HTTP port |
 
