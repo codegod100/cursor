@@ -15,6 +15,7 @@ scripts/            # install helpers
 | Skill | Purpose |
 |-------|---------|
 | `sticker-icons` | Flat ink/cream blob icons for `.desktop` / app marks |
+| `incubation-graduate` | Migrate incubated monorepo subprojects to standalone GitHub repos |
 
 ## Global install
 
