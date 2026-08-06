@@ -15,6 +15,7 @@ scripts/            # install helpers
 | Skill | Purpose |
 |-------|---------|
 | `sticker-icons` | Flat ink/cream blob icons for `.desktop` / app marks |
+| `cursor-agent` | Delegate coding tasks to the `cursor-agent` CLI as a subagent |
 
 ## Global install
 
