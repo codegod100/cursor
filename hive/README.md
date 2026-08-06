@@ -31,6 +31,32 @@ Distributed agent orchestration webapp. A **prime-agent** queen decomposes goals
 | Workflows | [cursor-agents](https://github.com/cocolwy/cursor-agents) (fork to `codegod100/cursor-agents`) | Multi-agent `/code` pipelines for complex tasks |
 | Coordinator | Hive (this repo) | Web UI, queue, node registry, distributed dispatch |
 
+## Deploy to hive.boxd.sh
+
+```bash
+# One-time: authenticate boxd, then provision the golden VM
+boxd auth login
+bash scripts/setup-boxd.sh
+
+# Or from the cursor monorepo:
+cd hive && bash scripts/setup-boxd.sh
+```
+
+This creates the `hive` boxd machine, clones the repo to `/home/boxd/hive`, installs systemd units, serves on **https://hive.boxd.sh**, and wires deploy-on-push via `hooks.hive.boxd.sh`.
+
+Pushes to `main` trigger `scripts/deploy-boxd.sh` on the VM. Tail the log:
+
+```bash
+boxd machine exec hive -- sudo tail -f /var/log/golden-deploy.log
+```
+
+Set secrets centrally (injected into workers):
+
+```bash
+boxd env set CURSOR_API_KEY sk-… --secret
+boxd env set PRIME_API_KEY … --secret
+```
+
 ## Quick start
 
 ### Nix (recommended)

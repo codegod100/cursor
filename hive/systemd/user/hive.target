@@ -1,0 +1,7 @@
+[Unit]
+Description=Hive distributed orchestrator
+Documentation=file://@ROOT@/systemd/README.md
+Wants=hive.service
+
+[Install]
+WantedBy=default.target
