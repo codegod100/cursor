@@ -1,8 +1,14 @@
+use erl_dist::LOWEST_DISTRIBUTION_PROTOCOL_VERSION;
+use erl_dist::handshake::{ClientSideHandshake, HandshakeStatus, ServerSideHandshake};
+use erl_dist::node::{Creation, LocalNode};
 use erl_irc::dist::{DistIrc, handshake_pair};
 use erl_irc::hub::Hub;
+use erl_irc::quic::{client_endpoint, connect_bidi, server_endpoint};
 use erl_irc::stream::ByteStreamIrc;
 use erl_irc::transport::IrcTransport;
 use erl_irc::wire::IrcMessage;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Once;
 
 #[test]
 fn wire_roundtrips() {
@@ -107,6 +113,89 @@ fn irc_over_erl_dist_handshake() {
             .unwrap();
         client_irc
             .send(IrcMessage::new("QUIT", ["done"]))
+            .await
+            .unwrap();
+        let _ = server.await;
+    });
+}
+
+fn install_crypto() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
+#[test]
+fn irc_over_erl_dist_on_quic() {
+    install_crypto();
+    smol::block_on(async {
+        let bind = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
+        let (server_ep, server_cert) = server_endpoint(bind).unwrap();
+        let addr = server_ep.local_addr().unwrap();
+
+        let server_node = LocalNode::new(
+            "s@127.0.0.1".parse().unwrap(),
+            Creation::random(),
+        );
+        let client_node = LocalNode::new(
+            "c@127.0.0.1".parse().unwrap(),
+            Creation::random(),
+        );
+        let cookie = "quic-test-cookie";
+
+        let server = {
+            let server_node = server_node.clone();
+            let cookie = cookie.to_owned();
+            smol::spawn(async move {
+                let (stream, _) = erl_irc::quic::accept_bidi(&server_ep).await.unwrap();
+                let mut hs =
+                    ServerSideHandshake::new(stream, server_node.clone(), &cookie);
+                let status = if hs.execute_recv_name().await.unwrap().is_some() {
+                    HandshakeStatus::Ok
+                } else {
+                    HandshakeStatus::Named {
+                        name: "generated".into(),
+                        creation: Creation::random(),
+                    }
+                };
+                let (conn, _) = hs.execute_rest(status).await.unwrap();
+                let mut irc = DistIrc::new(&server_node, conn);
+                let mut hub = Hub::new("quic.test");
+                hub.run_server_side(&mut irc, |_| {}).await
+            })
+        };
+
+        let client_ep = client_endpoint(
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+            Some(&server_cert),
+        )
+        .unwrap();
+        let (stream, _) = connect_bidi(&client_ep, addr, "localhost")
+            .await
+            .unwrap();
+
+        let mut hs = ClientSideHandshake::new(stream, client_node.clone(), cookie);
+        let _ = hs
+            .execute_send_name(LOWEST_DISTRIBUTION_PROTOCOL_VERSION)
+            .await
+            .unwrap();
+        let (conn, _) = hs.execute_rest(true).await.unwrap();
+        let mut irc = DistIrc::new(&client_node, conn);
+
+        irc.send(IrcMessage::new("NICK", ["q"]))
+            .await
+            .unwrap();
+        irc.send(IrcMessage::new("USER", ["q", "0", "*", "Q"]))
+            .await
+            .unwrap();
+        let welcome = irc.recv().await.unwrap();
+        assert_eq!(welcome.command, "001");
+
+        irc.send(IrcMessage::new("PRIVMSG", ["#q", "over quic"]))
+            .await
+            .unwrap();
+        irc.send(IrcMessage::new("QUIT", ["done"]))
             .await
             .unwrap();
         let _ = server.await;

@@ -23,7 +23,7 @@ erl-irc/            # incubated: IRC wire protocol over streams + erl_dist
 
 | Path | Purpose |
 |------|---------|
-| [`erl-irc/`](erl-irc/) | IRC as a transport-agnostic wire protocol; carriers include CRLF byte streams and [`erl_dist`](https://docs.rs/erl_dist) |
+| [`erl-irc/`](erl-irc/) | IRC as a transport-agnostic wire protocol; carriers include CRLF byte streams and [`erl_dist`](https://docs.rs/erl_dist) over TCP or QUIC |
 
 ## Global install
 

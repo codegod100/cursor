@@ -2,10 +2,10 @@
 name = "erl-irc"
 version = "0.1.0"
 edition = "2021"
-description = "IRC as a transport-agnostic wire protocol, carried over byte streams or erl_dist"
+description = "IRC as a transport-agnostic wire protocol, carried over byte streams, erl_dist, or QUIC"
 license = "MIT"
 readme = "README.md"
-keywords = ["irc", "erlang", "erl_dist", "wire-protocol"]
+keywords = ["irc", "erlang", "erl_dist", "quic", "wire-protocol"]
 categories = ["network-programming", "asynchronous"]
 
 [dependencies]
@@ -14,6 +14,10 @@ eetf = "0.11"
 futures = "0.3"
 smol = "2"
 thiserror = "2"
+async-dup = "1"
+quinn = { version = "0.11", default-features = false, features = ["runtime-smol", "rustls-ring", "futures-io"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rcgen = "0.14"
 
 [dev-dependencies]
 anyhow = "1"
@@ -29,3 +33,7 @@ path = "examples/tcp_server.rs"
 [[example]]
 name = "dist_peers"
 path = "examples/dist_peers.rs"
+
+[[example]]
+name = "dist_quic"
+path = "examples/dist_quic.rs"
