@@ -1,0 +1,109 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Avalon.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="520"
+        x:Class="Avalon.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Avalon"
+        Width="480"
+        Height="520"
+        MinWidth="360"
+        MinHeight="440"
+        WindowStartupLocation="CenterScreen">
+
+    <Design.DataContext>
+        <vm:MainViewModel />
+    </Design.DataContext>
+
+    <Panel>
+        <Panel.Background>
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#0B1C2C" Offset="0" />
+                <GradientStop Color="#163A4A" Offset="0.55" />
+                <GradientStop Color="#1F5A4E" Offset="1" />
+            </LinearGradientBrush>
+        </Panel.Background>
+
+        <Border Margin="28"
+                Padding="28"
+                CornerRadius="16"
+                Background="#F7F4EF"
+                BoxShadow="0 18 40 0 #40000000">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,24">
+                    <TextBlock Text="Avalon"
+                               FontSize="34"
+                               FontWeight="Bold"
+                               Foreground="#0B1C2C" />
+                    <TextBlock Text="Sample Avalonia temperature converter"
+                               FontSize="14"
+                               Opacity="0.72"
+                               Foreground="#0B1C2C"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,24,0,0">
+                    <TextBlock Text="{Binding StatusMessage}"
+                               FontSize="13"
+                               Opacity="0.8"
+                               Foreground="#0B1C2C"
+                               TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Convert"
+                                Command="{Binding ConvertCommand}"
+                                Classes="accent"
+                                Padding="16,10"
+                                MinWidth="110" />
+                        <Button Content="Swap"
+                                Command="{Binding SwapUnitsCommand}"
+                                Padding="16,10"
+                                MinWidth="90" />
+                        <Button Content="Reset"
+                                Command="{Binding ResetCommand}"
+                                Padding="16,10"
+                                MinWidth="90" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Spacing="18">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="From" FontWeight="SemiBold" Foreground="#0B1C2C" />
+                        <TextBox Text="{Binding InputValue}"
+                                 PlaceholderText="e.g. 20"
+                                 FontSize="18"
+                                 Padding="12,10" />
+                        <ComboBox ItemsSource="{Binding Units}"
+                                  SelectedItem="{Binding FromUnit}"
+                                  HorizontalAlignment="Stretch"
+                                  Padding="10,8" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="To" FontWeight="SemiBold" Foreground="#0B1C2C" />
+                        <ComboBox ItemsSource="{Binding Units}"
+                                  SelectedItem="{Binding ToUnit}"
+                                  HorizontalAlignment="Stretch"
+                                  Padding="10,8" />
+                        <Border Background="#E8F2EE"
+                                CornerRadius="10"
+                                Padding="16,18">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Result"
+                                           FontSize="12"
+                                           Opacity="0.7"
+                                           Foreground="#0B1C2C" />
+                                <TextBlock Text="{Binding ConvertedValue}"
+                                           FontSize="36"
+                                           FontWeight="Bold"
+                                           Foreground="#0B1C2C" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Panel>
+</Window>

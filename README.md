@@ -8,6 +8,7 @@ Personal Cursor IDE materials: Agent Skills, sticker-icon aesthetic, and related
 .cursor/skills/     # project skills (loaded when this repo is open)
 assets/             # reference icons / design exemplars
 scripts/            # install helpers
+avalon/             # sample Avalonia desktop app (incubating)
 ```
 
 ## Skills
@@ -17,6 +18,12 @@ scripts/            # install helpers
 | `sticker-icons` | Flat ink/cream blob icons for `.desktop` / app marks |
 | `cursor-agent` | Delegate coding tasks to the `cursor-agent` CLI as a subagent |
 | `incubation-graduate` | Migrate incubated monorepo subprojects to standalone GitHub repos |
+
+## Incubating
+
+| Project | Purpose |
+|---------|---------|
+| [`avalon/`](avalon/) | Sample Avalonia MVVM temperature converter |
 
 ## Global install
 
