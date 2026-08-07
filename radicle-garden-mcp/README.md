@@ -38,6 +38,26 @@ Or paste a browser session cookie instead of email/password:
 
 Get it from DevTools → Application → Cookies → `radicle.garden` after logging in.
 
+### Cloud Agent / OpenBao shortcut
+
+If `OPENBAO_TOKEN` is already a Cursor environment secret (as in `codegod100/cursor`), the MCP **auto-hydrates** on startup:
+
+| Cursor secret (optional) | OpenBao source |
+|--------------------------|----------------|
+| `BUILDKITE_API_TOKEN` | `secret/data/ai-api-keys` → `BUILDKITE_API_KEY` |
+| `RADICLE_GARDEN_EMAIL` | `secret/data/passwords` (radicle.garden) → `username` |
+| `RADICLE_GARDEN_PASSWORD` | same entry → `password` |
+
+You only need dedicated Cursor secrets if you want values persisted without OpenBao at runtime.
+
+To print values for manual paste into the Cursor Secrets UI:
+
+```bash
+OPENBAO_TOKEN=... ./scripts/print-radicle-mcp-secrets.sh
+```
+
+Cursor has no public API to write environment secrets programmatically.
+
 ### One-shot setup
 
 Ask Cursor:

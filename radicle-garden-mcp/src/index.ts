@@ -9,6 +9,7 @@ import {
   RadicleGardenError,
   verifyBuildkiteToken,
 } from "./client.js";
+import { hydrateSecretsFromOpenbao } from "./openbao.js";
 
 function jsonText(value: unknown): { content: [{ type: "text"; text: string }] } {
   return {
@@ -281,6 +282,7 @@ server.tool(
 );
 
 async function main(): Promise<void> {
+  await hydrateSecretsFromOpenbao();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
