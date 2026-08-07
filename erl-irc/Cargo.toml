@@ -1,0 +1,31 @@
+[package]
+name = "erl-irc"
+version = "0.1.0"
+edition = "2021"
+description = "IRC as a transport-agnostic wire protocol, carried over byte streams or erl_dist"
+license = "MIT"
+readme = "README.md"
+keywords = ["irc", "erlang", "erl_dist", "wire-protocol"]
+categories = ["network-programming", "asynchronous"]
+
+[dependencies]
+erl_dist = "0.8"
+eetf = "0.11"
+futures = "0.3"
+smol = "2"
+thiserror = "2"
+
+[dev-dependencies]
+anyhow = "1"
+
+[[example]]
+name = "duplex_chat"
+path = "examples/duplex_chat.rs"
+
+[[example]]
+name = "tcp_server"
+path = "examples/tcp_server.rs"
+
+[[example]]
+name = "dist_peers"
+path = "examples/dist_peers.rs"
