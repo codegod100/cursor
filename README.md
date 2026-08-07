@@ -6,6 +6,7 @@ Personal Cursor IDE materials: Agent Skills, sticker-icon aesthetic, and related
 
 ```
 .cursor/skills/     # project skills (loaded when this repo is open)
+radicle-garden-mcp/ # unofficial MCP for radicle.garden Buildkite setup
 assets/             # reference icons / design exemplars
 scripts/            # install helpers
 ```
