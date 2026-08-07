@@ -1,0 +1,53 @@
+{
+  "name": "@freeq/act",
+  "version": "0.4.0",
+  "description": "freeq.at/act — stateful signed addressed actions for IRCv3 (RFC v0.4 MVP)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "freeq-act": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
+    "bot": "tsx src/cli.ts bot",
+    "serve": "tsx src/cli.ts serve",
+    "demo": "tsx src/cli.ts demo"
+  },
+  "keywords": [
+    "freeq",
+    "irc",
+    "ircv3",
+    "handoff",
+    "agents"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@hono/node-server": "^2.1.0",
+    "@noble/ed25519": "^3.1.0",
+    "@noble/hashes": "^2.3.0",
+    "hono": "^4.13.1",
+    "ulid": "^3.0.2",
+    "ws": "^8.21.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.11",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
