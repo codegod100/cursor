@@ -3,13 +3,11 @@ import { promisify } from "node:util";
 import path from "node:path";
 import { z } from "zod";
 import {
-  defaultRadHome,
-  findWorkspaceRoot,
   requireRad,
   runRad,
   runRadOrThrow,
-  type RadEnv,
 } from "../rad.js";
+import { resolveRadEnv } from "../identity.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -84,19 +82,16 @@ export interface SetRepoRidResult {
   stderr: string;
 }
 
-function resolveRadEnv(input: {
+function resolveRadEnvInput(input: {
   env_name?: string;
   rad_home?: string;
   passphrase?: string;
-}): RadEnv {
-  const workspace = findWorkspaceRoot();
-  const radHome =
-    input.rad_home ??
-    (input.env_name
-      ? defaultRadHome(workspace, input.env_name)
-      : process.env.RAD_HOME ?? defaultRadHome(workspace));
-  const passphrase = input.passphrase ?? process.env.RAD_PASSPHRASE;
-  return { radHome, passphrase };
+}) {
+  return {
+    env_name: input.env_name,
+    rad_home: input.rad_home,
+    passphrase: input.passphrase,
+  };
 }
 
 export async function resolveRepoPath(repo?: string): Promise<string> {
@@ -139,7 +134,7 @@ function tryParseJson(text: string): unknown | undefined {
 
 export async function getRepoRid(input: GetRepoRidInput): Promise<GetRepoRidResult> {
   await requireRad();
-  const env = resolveRadEnv(input);
+  const env = await resolveRadEnv(resolveRadEnvInput(input));
   const repo = await resolveRepoPath(input.repo);
 
   const dot = await runRad(["."], env, { cwd: repo });
@@ -170,7 +165,7 @@ export async function getRepoRid(input: GetRepoRidInput): Promise<GetRepoRidResu
 
 export async function setRepoRid(input: SetRepoRidInput): Promise<SetRepoRidResult> {
   await requireRad();
-  const env = resolveRadEnv(input);
+  const env = await resolveRadEnv(resolveRadEnvInput(input));
   const repo = await resolveRepoPath(input.repo);
 
   if (input.public && input.private) {

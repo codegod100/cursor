@@ -1,6 +1,13 @@
 # Radicle MCP server
 
-MCP tools for [Radicle](https://radicle.xyz) device identities and patches. Thin wrapper over the Heartwood `rad` CLI and the [`rad-patch`](../../.cursor/skills/rad-patch/) skill scripts.
+MCP tools for [Radicle](https://radicle.xyz) patches. Issues signing credentials automatically and opens patches — no merge, no env secrets.
+
+## Tools
+
+| Tool | Purpose |
+|------|---------|
+| `create_patch` | Open or update a patch on a repo with a `rad` remote (auto-issues creds) |
+| `issue_device_key` | Explicitly create/load identity (optional — `create_patch` does this for you) |
 
 ## Prerequisites
 
@@ -9,9 +16,10 @@ MCP tools for [Radicle](https://radicle.xyz) device identities and patches. Thin
 | `rad` | Heartwood Radicle CLI |
 | `git-remote-rad` | Usually bundled with `rad` |
 | `git` ≥ 2.34 | Patch pushes |
-| `bash` | Runs `create-patch.sh` |
 
 Install Radicle: https://radicle.xyz
+
+The target repo needs a `rad` remote (`rad remote add rad <rid>` or `rad clone`).
 
 ## Setup
 
@@ -21,128 +29,47 @@ npm install
 npm run build
 ```
 
-Cursor loads the server from [`.cursor/mcp.json`](../../.cursor/mcp.json). Rebuild after TypeScript changes.
+Cursor loads the server from [`.cursor/mcp.json`](../../.cursor/mcp.json).
 
 ### HTTP mode (mcp.boxd.sh)
-
-The shared host (`mcp/host`) mounts services by path:
-
-| Path | Service |
-|------|---------|
-| `/` | Host index (lists mounted MCPs) |
-| `/radicle/mcp` | Radicle Streamable HTTP MCP |
-| `/radicle/health` | Radicle health check |
 
 ```bash
 cd mcp/host && npm install && npm start
 ```
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `MCP_HOST_PORT` | `8000` | Listen port |
-| `MCP_HOST_BIND` | `0.0.0.0` | Bind address |
-| `MCP_HOST_ALLOWED_HOSTS` | `mcp.boxd.sh,localhost` | DNS rebinding allowlist |
+Radicle MCP: `https://mcp.boxd.sh/radicle/mcp`
 
-Local radicle-only dev: `cd mcp/radicle && npm run start:http` (mounts at `/radicle`).
+## Identity (automatic)
 
-### Deploy to mcp.boxd.sh
+`create_patch` calls `resolveRadEnv()` internally. If no profile exists at `<workspace>/.radicle`, the MCP runs `rad auth` and stores the passphrase in `<rad_home>/.mcp-passphrase`. No `RAD_HOME` / `RAD_PASSPHRASE` env secrets needed.
 
-From a machine with `boxd` and `gh` authenticated:
+Opening patches does **not** require delegate status — anyone with a Radicle identity can propose. Delegates only matter for merging to canonical branches.
 
-```bash
-bash scripts/setup-boxd.sh
-# optional: RAD_PASSPHRASE=… for the VM's rad identity
-```
+## `create_patch`
 
-Provisions the `mcp` boxd VM. Radicle MCP: `https://mcp.boxd.sh/radicle/mcp`
-
-**Cursor remote config:**
-
-```json
-{
-  "mcpServers": {
-    "radicle": {
-      "url": "https://mcp.boxd.sh/radicle/mcp"
-    }
-  }
-}
-```
-
-## Tools
-
-### `issue_device_key`
-
-Create a Radicle device identity scoped to an environment via `RAD_HOME`.
-
-| Argument | Description |
-|----------|-------------|
-| `alias` | Node alias (required) |
-| `env_name` | Scope keys to `<workspace>/.radicle/<env_name>` |
-| `rad_home` | Override `RAD_HOME` path |
-| `passphrase` | Key passphrase (generated if omitted) |
-| `start_node` | Start `rad node --daemon` after auth |
-| `force` | Re-issue even if identity exists |
-
-Returns `did`, `env_setup` (`RAD_HOME`, `RAD_PASSPHRASE`), and a `delegate_hint` for adding the device to a repo.
-
-**Cloud Agent:** store `RAD_HOME` and `RAD_PASSPHRASE` as environment secrets, then call `rad id update --delegate <did>` from a maintainer machine.
-
-### `create_patch`
-
-Open or update a patch on a repo with a `rad` remote. Wraps `.cursor/skills/rad-patch/scripts/create-patch.sh`.
-
-| Argument | Description |
-|----------|-------------|
+| Argument | Purpose |
+|----------|---------|
 | `title` | Patch title (required) |
 | `repo` | Repo path (default: git root) |
 | `body` | Patch description |
 | `branch` | Branch to create/checkout |
-| `commit` | Stage, commit, then push |
+| `commit` | Stage all, commit, then push |
 | `patch_id` | Update existing patch |
 | `draft` | Open as draft |
-| `env_name` / `rad_home` | Identity for signing |
+| `dry_run` | Print planned git push |
 
-### `get_repo_rid`
+Returns `patch_id`, `patch_url`, and `did` when a new identity was issued.
 
-Return the Repository ID (RID) for a git repo.
-
-| Argument | Description |
-|----------|-------------|
-| `repo` | Repo path (default: git root) |
-| `env_name` / `rad_home` | Identity context |
-
-Returns `rid`, `remote_url`, `payload` (name/description/branch), and `identity` document.
-
-### `set_repo_rid`
-
-Publish a new repo on Radicle or link to an existing RID.
-
-| Argument | Description |
-|----------|-------------|
-| `rid` | Link to existing RID (`rad init --existing`). Omit to create new. |
-| `name` / `description` | Metadata for new repos |
-| `public` / `private` | Visibility for new repos |
-| `set_upstream` | Track `rad/<default-branch>` (default true) |
-| `seed_first` | Run `rad seed` before linking (default true) |
-| `repo` | Repo path (default: git root) |
-
-### `rad_self`
-
-Show DID, alias, and config paths for the identity at `RAD_HOME`.
-
-## Example flow
+## Example
 
 ```text
-1. issue_device_key { alias: "cloud-agent", env_name: "ci" }
-2. Add returned DID as repo delegate (maintainer)
-3. create_patch { title: "Fix parsing", env_name: "ci", commit: "Fix parsing" }
+create_patch { title: "Fix parsing", commit: "Fix parsing" }
 ```
 
 ## Environment variables
 
 | Variable | Purpose |
 |----------|---------|
-| `RAD_HOME` | Radicle home (keys, node, storage) |
-| `RAD_PASSPHRASE` | Bypass ssh-agent for headless signing |
-| `CURSOR_WORKSPACE` | Workspace root for default paths |
-| `RAD_PATCH_SCRIPT` | Override path to `create-patch.sh` |
+| `CURSOR_WORKSPACE` | Workspace root for default `.radicle` path |
+| `RAD_HOME` | Optional override |
+| `RAD_PASSPHRASE` | Optional override |
