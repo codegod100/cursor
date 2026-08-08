@@ -1,0 +1,18 @@
+# Optional scheduled pipeline: poll for new Radicle issues every 5 minutes.
+# Enable in Buildkite UI → Pipeline → Settings → Schedules, or merge into pipeline.yml.
+#
+# steps:
+#   - label: ":radicle: Poll for new issues"
+#     command: bash scripts/buildkite/poll-issues.sh
+#     env:
+#       BUILDKITE_ORG: nandi
+#       BUILDKITE_PIPELINE: your-pipeline-slug
+#       BUILDKITE_API_TOKEN: ${BUILDKITE_API_TOKEN}
+
+steps:
+  - label: ":radicle: Poll for new issues"
+    command: bash scripts/buildkite/poll-issues.sh
+    env:
+      BUILDKITE_API_TOKEN: ${BUILDKITE_API_TOKEN}
+      BUILDKITE_ORG: ${BUILDKITE_ORG}
+      BUILDKITE_PIPELINE: ${BUILDKITE_PIPELINE}
