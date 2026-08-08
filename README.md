@@ -29,6 +29,14 @@ scripts/            # install helpers
 
 Build: `cd mcp/radicle && npm install && npm run build`. Requires the `rad` CLI on `PATH`.
 
+### Hosted (boxd)
+
+```bash
+bash scripts/setup-boxd.sh
+```
+
+Serves Streamable HTTP MCP at `https://radicle.boxd.sh/mcp` (port 8000 on the VM).
+
 ## Global install
 
 Project skills only load in this workspace. To use them everywhere:

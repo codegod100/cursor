@@ -1,0 +1,15 @@
+[Unit]
+Description=Radicle MCP prep (deps + runtime.env)
+Documentation=file://@ROOT@/mcp/radicle/README.md
+Before=radicle.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@
+Environment=HOME=%h
+Environment=PATH=%h/.radicle/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=@ROOT@/scripts/prep.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=radicle.target

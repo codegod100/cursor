@@ -1,0 +1,20 @@
+[Unit]
+Description=Radicle MCP server (HTTP :8000)
+Documentation=file://@ROOT@/mcp/radicle/README.md
+Requires=radicle-prep.service
+After=radicle-prep.service network-online.target
+PartOf=radicle.target
+
+[Service]
+Type=simple
+WorkingDirectory=@ROOT@/mcp/radicle
+Environment=HOME=%h
+Environment=PATH=%h/.radicle/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=-%h/.config/radicle/runtime.env
+ExecStart=@NPM@ run start:http
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=radicle.target

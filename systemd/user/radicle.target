@@ -1,0 +1,7 @@
+[Unit]
+Description=Radicle MCP on boxd
+Documentation=file://@ROOT@/mcp/radicle/README.md
+Wants=radicle.service
+
+[Install]
+WantedBy=default.target
