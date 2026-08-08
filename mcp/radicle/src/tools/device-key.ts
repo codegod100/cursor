@@ -18,32 +18,32 @@ export const issueDeviceKeySchema = z.object({
     .min(1)
     .optional()
     .describe(
-      "Environment label used to scope RAD_HOME under <workspace>/.radicle/<env_name>. Omit to use <workspace>/.radicle.",
+      "Scope RAD_HOME to <workspace>/.radicle/<env_name>. Default: <workspace>/.radicle.",
     ),
   alias: z
     .string()
     .min(1)
+    .optional()
+    .default("cursor-agent")
     .describe("Radicle node alias for this device identity."),
   passphrase: z
     .string()
     .optional()
-    .describe(
-      "Passphrase for the Ed25519 keypair. Generated if omitted. Store as RAD_PASSPHRASE in env secrets.",
-    ),
+    .describe("Key passphrase (generated and stored locally if omitted)."),
   rad_home: z
     .string()
     .optional()
-    .describe("Override RAD_HOME path instead of the default workspace location."),
+    .describe("Override RAD_HOME path."),
   start_node: z
     .boolean()
     .optional()
     .default(false)
-    .describe("Start rad node in the background after issuing the key."),
+    .describe("Start rad node after issuing the key."),
   force: z
     .boolean()
     .optional()
     .default(false)
-    .describe("Re-issue even if an identity already exists at rad_home (not recommended)."),
+    .describe("Re-issue even if an identity already exists (not recommended)."),
 });
 
 export type IssueDeviceKeyInput = z.infer<typeof issueDeviceKeySchema>;
@@ -53,15 +53,9 @@ export interface IssueDeviceKeyResult {
   alias: string;
   rad_home: string;
   config: string;
-  passphrase?: string;
   created: boolean;
   node_started: boolean;
   nid?: string;
-  env_setup: {
-    RAD_HOME: string;
-    RAD_PASSPHRASE?: string;
-  };
-  delegate_hint: string;
 }
 
 export async function issueDeviceKey(
@@ -70,8 +64,7 @@ export async function issueDeviceKey(
   await requireRad();
 
   const workspace = findWorkspaceRoot();
-  const radHome =
-    input.rad_home ?? defaultRadHome(workspace, input.env_name);
+  const radHome = input.rad_home ?? defaultRadHome(workspace, input.env_name);
   const storedPassphrase = await loadStoredPassphrase(radHome);
   const passphrase = input.passphrase ?? storedPassphrase ?? randomBytes(24).toString("base64url");
   const env: RadEnv = { radHome, passphrase };
@@ -81,7 +74,6 @@ export async function issueDeviceKey(
   const exists = await identityExists(env);
   if (exists && !input.force) {
     const self = await getSelf(env);
-    const activePassphrase = input.passphrase ?? storedPassphrase;
     let nid: string | undefined;
     if (input.start_node) {
       nid = await startNode(env);
@@ -91,15 +83,9 @@ export async function issueDeviceKey(
       alias: self.alias,
       rad_home: self.home,
       config: self.config,
-      passphrase: activePassphrase,
       created: false,
       node_started: Boolean(nid),
       nid,
-      env_setup: {
-        RAD_HOME: self.home,
-        ...(activePassphrase ? { RAD_PASSPHRASE: activePassphrase } : {}),
-      },
-      delegate_hint: `Add this device as a repo delegate: rad id update --title "Add ${self.alias}" --delegate ${self.did}`,
     };
   }
 
@@ -117,14 +103,8 @@ export async function issueDeviceKey(
     alias: self.alias,
     rad_home: self.home,
     config: self.config,
-    passphrase,
     created: true,
     node_started: Boolean(nid),
     nid,
-    env_setup: {
-      RAD_HOME: self.home,
-      RAD_PASSPHRASE: passphrase,
-    },
-    delegate_hint: `Add this device as a repo delegate: rad id update --title "Add ${self.alias}" --delegate ${self.did}`,
   };
 }

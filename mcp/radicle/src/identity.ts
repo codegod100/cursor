@@ -26,7 +26,6 @@ export interface ResolveRadEnvInput {
 
 export interface ResolvedRadEnv extends RadEnv {
   identity_issued?: boolean;
-  delegate_hint?: string;
 }
 
 function passphrasePath(radHome: string): string {
@@ -87,12 +86,10 @@ export async function resolveRadEnv(input: ResolveRadEnvInput = {}): Promise<Res
   await runRadOrThrow(["auth", "--alias", alias], issueEnv);
   await storePassphrase(radHome, passphrase);
 
-  const did = (await runRadOrThrow(["self", "--did"], issueEnv)).stdout.trim();
   return {
     radHome,
     passphrase,
     identity_issued: true,
-    delegate_hint: `Add this device as a repo delegate: rad id update --title "Add ${alias}" --delegate ${did}`,
   };
 }
 

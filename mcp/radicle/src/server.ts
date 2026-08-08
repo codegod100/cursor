@@ -1,9 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { RadError } from "./rad.js";
 import { createPatch, createPatchSchema } from "./tools/patch.js";
 import { issueDeviceKey, issueDeviceKeySchema } from "./tools/device-key.js";
-import { getRepoRid, getRepoRidSchema, setRepoRid, setRepoRidSchema } from "./tools/repo.js";
 
 export function textResult(data: unknown) {
   return {
@@ -32,7 +30,7 @@ export function errorResult(error: unknown) {
 export function createRadicleServer(): McpServer {
   const server = new McpServer({
     name: "radicle",
-    version: "0.1.0",
+    version: "0.2.0",
   });
 
   server.registerTool(
@@ -40,7 +38,7 @@ export function createRadicleServer(): McpServer {
     {
       title: "Issue Radicle device key",
       description:
-        "Create or load a Radicle device identity (Ed25519 keypair) scoped to an environment via RAD_HOME. Returns DID, alias, and paths. Other tools auto-issue an identity when needed; call this explicitly to choose alias/env_name or start the node.",
+        "Create or load a Radicle signing identity at <workspace>/.radicle. Usually unnecessary — create_patch auto-issues credentials. Use this to pick alias/env_name or start the node.",
       inputSchema: issueDeviceKeySchema.shape,
     },
     async (input) => {
@@ -59,7 +57,7 @@ export function createRadicleServer(): McpServer {
     {
       title: "Create or update Radicle patch",
       description:
-        "Open or update a Radicle patch by pushing local commits to refs/patches on the rad remote. Uses patch.message push options (no editor). Requires a rad remote and commits not already on the base branch.",
+        "Open or update a Radicle patch (refs/patches on the rad remote). Auto-issues signing credentials when needed. Does not merge — proposal only. Requires a rad remote and commits not already on the base branch.",
       inputSchema: createPatchSchema.shape,
     },
     async (input) => {
@@ -67,80 +65,6 @@ export function createRadicleServer(): McpServer {
         const parsed = createPatchSchema.parse(input);
         const result = await createPatch(parsed);
         return textResult(result);
-      } catch (error) {
-        return errorResult(error);
-      }
-    },
-  );
-
-  server.registerTool(
-    "get_repo_rid",
-    {
-      title: "Get Radicle repository ID",
-      description:
-        "Return the Repository ID (RID) for a git repo from rad . and related inspect output. Includes rad remote URL, project payload, and identity document when available.",
-      inputSchema: getRepoRidSchema.shape,
-    },
-    async (input) => {
-      try {
-        const parsed = getRepoRidSchema.parse(input);
-        const result = await getRepoRid(parsed);
-        return textResult(result);
-      } catch (error) {
-        return errorResult(error);
-      }
-    },
-  );
-
-  server.registerTool(
-    "set_repo_rid",
-    {
-      title: "Set Radicle repository ID",
-      description:
-        "Initialize a repo on Radicle (rad init) or link a working copy to an existing RID (rad seed + rad init --existing). Configures the rad git remote.",
-      inputSchema: setRepoRidSchema.shape,
-    },
-    async (input) => {
-      try {
-        const parsed = setRepoRidSchema.parse(input);
-        const result = await setRepoRid(parsed);
-        return textResult(result);
-      } catch (error) {
-        return errorResult(error);
-      }
-    },
-  );
-
-  server.registerTool(
-    "rad_self",
-    {
-      title: "Show Radicle identity",
-      description:
-        "Return DID, alias, and paths for the Radicle identity at RAD_HOME. Auto-issues a device key at <workspace>/.radicle when none exists (no env secrets required).",
-      inputSchema: {
-        env_name: z
-          .string()
-          .optional()
-          .describe("Use RAD_HOME at <workspace>/.radicle/<env_name>."),
-        rad_home: z.string().optional().describe("Override RAD_HOME path."),
-        passphrase: z.string().optional().describe("RAD_PASSPHRASE if the key is encrypted."),
-      },
-    },
-    async (input) => {
-      try {
-        const { getSelf, requireRad } = await import("./rad.js");
-        const { resolveRadEnv } = await import("./identity.js");
-        await requireRad();
-        const env = await resolveRadEnv({
-          env_name: input.env_name,
-          rad_home: input.rad_home,
-          passphrase: input.passphrase,
-        });
-        const result = await getSelf(env);
-        return textResult({
-          ...result,
-          ...(env.identity_issued ? { identity_issued: true, delegate_hint: env.delegate_hint } : {}),
-        });
       } catch (error) {
         return errorResult(error);
       }

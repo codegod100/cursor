@@ -16,6 +16,87 @@ export interface RadRunResult {
   exitCode: number;
 }
 
+function childEnv(env: RadEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {
+    ...process.env,
+    RAD_HOME: env.radHome,
+    GIT_TERMINAL_PROMPT: "0",
+  };
+  if (env.passphrase !== undefined) {
+    out.RAD_PASSPHRASE = env.passphrase;
+  }
+  return out;
+}
+
+export async function runGit(
+  args: string[],
+  env: RadEnv,
+  options?: { cwd?: string },
+): Promise<RadRunResult> {
+  try {
+    const { stdout, stderr } = await execFileAsync("git", args, {
+      cwd: options?.cwd,
+      env: childEnv(env),
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return { stdout: stdout.toString(), stderr: stderr.toString(), exitCode: 0 };
+  } catch (error: unknown) {
+    const err = error as {
+      stdout?: string | Buffer;
+      stderr?: string | Buffer;
+      code?: number;
+      message?: string;
+    };
+    const stdout = err.stdout?.toString() ?? "";
+    const stderr = err.stderr?.toString() ?? err.message ?? "";
+    const exitCode = typeof err.code === "number" ? err.code : 1;
+    return { stdout, stderr, exitCode };
+  }
+}
+
+export async function runGitOrThrow(
+  args: string[],
+  env: RadEnv,
+  options?: { cwd?: string },
+): Promise<RadRunResult> {
+  const result = await runGit(args, env, options);
+  if (result.exitCode !== 0) {
+    const detail = [result.stderr, result.stdout].filter(Boolean).join("\n").trim();
+    throw new Error(detail ? `git ${args.join(" ")} failed: ${detail}` : `git ${args.join(" ")} failed`);
+  }
+  return result;
+}
+
+export async function resolveRepoPath(repo?: string): Promise<string> {
+  if (repo) {
+    return path.resolve(repo);
+  }
+  const { stdout } = await execFileAsync("git", ["rev-parse", "--show-toplevel"]);
+  return stdout.trim();
+}
+
+export async function requireRadRemote(repo: string, env: RadEnv): Promise<void> {
+  const result = await runGit(["remote", "get-url", "rad"], env, { cwd: repo });
+  if (result.exitCode !== 0 || !result.stdout.trim()) {
+    throw new Error(
+      `remote 'rad' missing in ${repo} — run rad clone or: rad remote add rad <rid>`,
+    );
+  }
+}
+
+export async function branchExists(repo: string, branch: string, env: RadEnv): Promise<boolean> {
+  const result = await runGit(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], env, {
+    cwd: repo,
+  });
+  return result.exitCode === 0;
+}
+
+export async function workingTreeClean(repo: string, env: RadEnv): Promise<boolean> {
+  const result = await runGit(["status", "--porcelain"], env, { cwd: repo });
+  return result.exitCode === 0 && result.stdout.trim() === "";
+}
+
+
 export class RadError extends Error {
   constructor(
     message: string,
@@ -41,19 +122,10 @@ export async function runRad(
   env: RadEnv,
   options?: { cwd?: string },
 ): Promise<RadRunResult> {
-  const childEnv: NodeJS.ProcessEnv = {
-    ...process.env,
-    RAD_HOME: env.radHome,
-    GIT_TERMINAL_PROMPT: "0",
-  };
-  if (env.passphrase !== undefined) {
-    childEnv.RAD_PASSPHRASE = env.passphrase;
-  }
-
   try {
     const { stdout, stderr } = await execFileAsync("rad", args, {
       cwd: options?.cwd,
-      env: childEnv,
+      env: childEnv(env),
       maxBuffer: 10 * 1024 * 1024,
     });
     return { stdout: stdout.toString(), stderr: stderr.toString(), exitCode: 0 };
