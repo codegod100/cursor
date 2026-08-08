@@ -10,6 +10,7 @@ import {
   runRadOrThrow,
   type RadEnv,
 } from "../rad.js";
+import { loadStoredPassphrase, startNode, storePassphrase } from "../identity.js";
 
 export const issueDeviceKeySchema = z.object({
   env_name: z
@@ -71,7 +72,8 @@ export async function issueDeviceKey(
   const workspace = findWorkspaceRoot();
   const radHome =
     input.rad_home ?? defaultRadHome(workspace, input.env_name);
-  const passphrase = input.passphrase ?? randomBytes(24).toString("base64url");
+  const storedPassphrase = await loadStoredPassphrase(radHome);
+  const passphrase = input.passphrase ?? storedPassphrase ?? randomBytes(24).toString("base64url");
   const env: RadEnv = { radHome, passphrase };
 
   await mkdir(radHome, { recursive: true });
@@ -79,6 +81,7 @@ export async function issueDeviceKey(
   const exists = await identityExists(env);
   if (exists && !input.force) {
     const self = await getSelf(env);
+    const activePassphrase = input.passphrase ?? storedPassphrase;
     let nid: string | undefined;
     if (input.start_node) {
       nid = await startNode(env);
@@ -88,19 +91,20 @@ export async function issueDeviceKey(
       alias: self.alias,
       rad_home: self.home,
       config: self.config,
-      passphrase: input.passphrase,
+      passphrase: activePassphrase,
       created: false,
       node_started: Boolean(nid),
       nid,
       env_setup: {
         RAD_HOME: self.home,
-        ...(input.passphrase ? { RAD_PASSPHRASE: input.passphrase } : {}),
+        ...(activePassphrase ? { RAD_PASSPHRASE: activePassphrase } : {}),
       },
       delegate_hint: `Add this device as a repo delegate: rad id update --title "Add ${self.alias}" --delegate ${self.did}`,
     };
   }
 
   await runRadOrThrow(["auth", "--alias", input.alias], env);
+  await storePassphrase(radHome, passphrase);
 
   const self = await getSelf(env);
   let nid: string | undefined;
@@ -123,11 +127,4 @@ export async function issueDeviceKey(
     },
     delegate_hint: `Add this device as a repo delegate: rad id update --title "Add ${self.alias}" --delegate ${self.did}`,
   };
-}
-
-async function startNode(env: RadEnv): Promise<string | undefined> {
-  await runRadOrThrow(["node", "start", "--daemon"], env);
-  const status = await runRadOrThrow(["node", "status", "--only", "nid"], env);
-  const nid = status.stdout.trim();
-  return nid || undefined;
 }

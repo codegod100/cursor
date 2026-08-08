@@ -40,7 +40,7 @@ export function createRadicleServer(): McpServer {
     {
       title: "Issue Radicle device key",
       description:
-        "Create or load a Radicle device identity (Ed25519 keypair) scoped to an environment via RAD_HOME. Returns DID, alias, and env vars (RAD_HOME, RAD_PASSPHRASE) for Cloud Agent secrets. Each device needs its own DID; add it as a repo delegate before pushing patches.",
+        "Create or load a Radicle device identity (Ed25519 keypair) scoped to an environment via RAD_HOME. Returns DID, alias, and paths. Other tools auto-issue an identity when needed; call this explicitly to choose alias/env_name or start the node.",
       inputSchema: issueDeviceKeySchema.shape,
     },
     async (input) => {
@@ -115,7 +115,8 @@ export function createRadicleServer(): McpServer {
     "rad_self",
     {
       title: "Show Radicle identity",
-      description: "Return DID, alias, and paths for the Radicle identity at RAD_HOME.",
+      description:
+        "Return DID, alias, and paths for the Radicle identity at RAD_HOME. Auto-issues a device key at <workspace>/.radicle when none exists (no env secrets required).",
       inputSchema: {
         env_name: z
           .string()
@@ -127,20 +128,19 @@ export function createRadicleServer(): McpServer {
     },
     async (input) => {
       try {
-        const { defaultRadHome, findWorkspaceRoot, getSelf, requireRad } =
-          await import("./rad.js");
+        const { getSelf, requireRad } = await import("./rad.js");
+        const { resolveRadEnv } = await import("./identity.js");
         await requireRad();
-        const workspace = findWorkspaceRoot();
-        const radHome =
-          input.rad_home ??
-          (input.env_name
-            ? defaultRadHome(workspace, input.env_name)
-            : process.env.RAD_HOME ?? defaultRadHome(workspace));
-        const result = await getSelf({
-          radHome,
-          passphrase: input.passphrase ?? process.env.RAD_PASSPHRASE,
+        const env = await resolveRadEnv({
+          env_name: input.env_name,
+          rad_home: input.rad_home,
+          passphrase: input.passphrase,
         });
-        return textResult(result);
+        const result = await getSelf(env);
+        return textResult({
+          ...result,
+          ...(env.identity_issued ? { identity_issued: true, delegate_hint: env.delegate_hint } : {}),
+        });
       } catch (error) {
         return errorResult(error);
       }

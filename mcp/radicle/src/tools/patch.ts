@@ -3,12 +3,11 @@ import { promisify } from "node:util";
 import { access, constants } from "node:fs/promises";
 import { z } from "zod";
 import {
-  defaultRadHome,
   findCreatePatchScript,
   findWorkspaceRoot,
   requireRad,
-  type RadEnv,
 } from "../rad.js";
+import { resolveRadEnv } from "../identity.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -67,15 +66,12 @@ function extractPatchUrl(text: string): string | undefined {
   return match?.[1];
 }
 
-function resolveRadEnv(input: CreatePatchInput): RadEnv {
-  const workspace = findWorkspaceRoot();
-  const radHome =
-    input.rad_home ??
-    (input.env_name
-      ? defaultRadHome(workspace, input.env_name)
-      : process.env.RAD_HOME ?? defaultRadHome(workspace));
-  const passphrase = input.passphrase ?? process.env.RAD_PASSPHRASE;
-  return { radHome, passphrase };
+function resolveRadEnvInput(input: CreatePatchInput) {
+  return {
+    env_name: input.env_name,
+    rad_home: input.rad_home,
+    passphrase: input.passphrase,
+  };
 }
 
 export async function createPatch(input: CreatePatchInput): Promise<CreatePatchResult> {
@@ -88,7 +84,7 @@ export async function createPatch(input: CreatePatchInput): Promise<CreatePatchR
     throw new Error(`create-patch script not found or not executable: ${script}`);
   }
 
-  const radEnv = resolveRadEnv(input);
+  const radEnv = await resolveRadEnv(resolveRadEnvInput(input));
   const args = [script];
 
   if (input.repo) args.push("--repo", input.repo);

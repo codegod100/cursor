@@ -70,6 +70,12 @@ Provisions the `mcp` boxd VM. Radicle MCP: `https://mcp.boxd.sh/radicle/mcp`
 
 ## Tools
 
+## Identity (no manual auth)
+
+Other tools call `resolveRadEnv` internally: if no Radicle profile exists at `<workspace>/.radicle` (or `<workspace>/.radicle/<env_name>`), the MCP runs `rad auth` and stores the generated passphrase in `<rad_home>/.mcp-passphrase` (mode 0600). You do **not** need `RAD_HOME` / `RAD_PASSPHRASE` in Cursor env secrets unless you want to override the defaults.
+
+Each auto-issued device still needs its DID added as a **repo delegate** before patches can be pushed.
+
 ### `issue_device_key`
 
 Create a Radicle device identity scoped to an environment via `RAD_HOME`.
@@ -83,9 +89,7 @@ Create a Radicle device identity scoped to an environment via `RAD_HOME`.
 | `start_node` | Start `rad node --daemon` after auth |
 | `force` | Re-issue even if identity exists |
 
-Returns `did`, `env_setup` (`RAD_HOME`, `RAD_PASSPHRASE`), and a `delegate_hint` for adding the device to a repo.
-
-**Cloud Agent:** store `RAD_HOME` and `RAD_PASSPHRASE` as environment secrets, then call `rad id update --delegate <did>` from a maintainer machine.
+Returns `did`, `rad_home`, and a `delegate_hint` for adding the device to a repo. Passphrase is kept in `<rad_home>/.mcp-passphrase` for headless reuse.
 
 ### `create_patch`
 
@@ -133,16 +137,16 @@ Show DID, alias, and config paths for the identity at `RAD_HOME`.
 ## Example flow
 
 ```text
-1. issue_device_key { alias: "cloud-agent", env_name: "ci" }
-2. Add returned DID as repo delegate (maintainer)
-3. create_patch { title: "Fix parsing", env_name: "ci", commit: "Fix parsing" }
+1. rad_self {}   # auto-issues identity if missing; note delegate_hint
+2. Add returned DID as repo delegate (maintainer, one-time per device)
+3. create_patch { title: "Fix parsing", commit: "Fix parsing" }
 ```
 
 ## Environment variables
 
 | Variable | Purpose |
 |----------|---------|
-| `RAD_HOME` | Radicle home (keys, node, storage) |
-| `RAD_PASSPHRASE` | Bypass ssh-agent for headless signing |
+| `RAD_HOME` | Optional override for Radicle home (default: `<workspace>/.radicle`) |
+| `RAD_PASSPHRASE` | Optional override; otherwise read from `.mcp-passphrase` or auto-generated |
 | `CURSOR_WORKSPACE` | Workspace root for default paths |
 | `RAD_PATCH_SCRIPT` | Override path to `create-patch.sh` |
