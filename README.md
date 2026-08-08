@@ -27,7 +27,7 @@ scripts/            # install helpers
 
 | Server | Path | Tools |
 |--------|------|-------|
-| `radicle` | `mcp/radicle/` | `issue_device_key`, `create_patch`, `get_repo_rid`, `set_repo_rid`, `rad_self` |
+| `radicle` | `mcp/radicle/` | `issue_device_key`, `create_patch` |
 
 Build: `cd mcp/radicle && npm install && npm run build`. Requires the `rad` CLI on `PATH`.
 
