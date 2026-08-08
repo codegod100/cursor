@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "radicle": {
+      "command": "node",
+      "args": ["mcp/radicle/dist/index.js"],
+      "env": {
+        "CURSOR_WORKSPACE": "${workspaceFolder}"
+      }
+    }
+  }
+}

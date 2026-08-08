@@ -6,6 +6,8 @@ Personal Cursor IDE materials: Agent Skills, sticker-icon aesthetic, and related
 
 ```
 .cursor/skills/     # project skills (loaded when this repo is open)
+.cursor/mcp.json    # MCP server config (Radicle)
+mcp/radicle/        # Radicle MCP server (device keys + patches)
 assets/             # reference icons / design exemplars
 scripts/            # install helpers
 ```
@@ -18,6 +20,14 @@ scripts/            # install helpers
 | `cursor-agent` | Delegate coding tasks to the `cursor-agent` CLI as a subagent |
 | `incubation-graduate` | Migrate incubated monorepo subprojects to standalone GitHub repos |
 | `rad-patch` | Open or update Radicle patches from local git changes |
+
+## MCP servers
+
+| Server | Path | Tools |
+|--------|------|-------|
+| `radicle` | `mcp/radicle/` | `issue_device_key`, `create_patch`, `rad_self` |
+
+Build: `cd mcp/radicle && npm install && npm run build`. Requires the `rad` CLI on `PATH`.
 
 ## Global install
 
