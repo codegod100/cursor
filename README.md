@@ -17,6 +17,7 @@ scripts/            # install helpers
 | `sticker-icons` | Flat ink/cream blob icons for `.desktop` / app marks |
 | `cursor-agent` | Delegate coding tasks to the `cursor-agent` CLI as a subagent |
 | `incubation-graduate` | Migrate incubated monorepo subprojects to standalone GitHub repos |
+| `rad-patch` | Open or update Radicle patches from local git changes |
 
 ## Global install
 
