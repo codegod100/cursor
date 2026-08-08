@@ -1,0 +1,31 @@
+# Radicle + Buildkite: CI then open a patch on the rad remote.
+#
+# Setup (radicle.garden):
+#   1. Add this file to your rad repo (push to rad, not only GitHub).
+#   2. Wire Buildkite via radicle.garden integrations (radicle-garden-mcp helps).
+#   3. Ensure agents have `rad` + `git-remote-rad` and RAD_HOME auth.
+#
+# Triggers:
+#   - Push a branch to `rad` → broker runs this pipeline → on success, opens a patch.
+#   - Patch events (branch patch/*) skip the open-patch step (already a patch build).
+#
+# GitHub-only checkouts: set RAD_REPO_RID on the pipeline / cluster env.
+
+env:
+  RAD_OPEN_PATCH: "1"
+
+steps:
+  - label: ":git: checkout info"
+    command: |
+      echo "repo=${BUILDKITE_REPO}"
+      echo "branch=${BUILDKITE_BRANCH}"
+      echo "commit=${BUILDKITE_COMMIT}"
+      git remote -v
+      git log -1 --oneline
+
+  - wait
+
+  - label: ":radicle: open patch"
+    command: ./scripts/buildkite-open-rad-patch.sh
+    env:
+      RAD_REPO_RID: "${RAD_REPO_RID:-}"
