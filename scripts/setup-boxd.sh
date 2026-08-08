@@ -36,7 +36,7 @@ if ! command -v boxd >/dev/null 2>&1; then
 fi
 
 if [ -z "${BOXD_TOKEN:-}" ]; then
-  if ! boxd --json auth 2>/dev/null | grep -q '"authenticated":true'; then
+  if ! boxd --json auth 2>/dev/null | grep -q '"user_id"'; then
     echo "Not authenticated. Run: boxd auth login" >&2
     echo "Or set BOXD_TOKEN to a valid API key." >&2
     exit 1
@@ -50,39 +50,53 @@ import sys, json
 data = json.load(sys.stdin)
 for m in data:
     if m.get('name') == '$VM_NAME':
-        print(m.get('id',''))
+        print(m.get('name', ''))
         break
 " 2>/dev/null || true)
 
+wait_for_machine() {
+  local name=$1
+  for _ in $(seq 1 60); do
+    local status
+    status=$(boxd --json machine get "$name" 2>/dev/null \
+      | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null \
+      || true)
+    if [ "$status" = "running" ]; then
+      return 0
+    fi
+    sleep 5
+  done
+  echo "[setup] timed out waiting for $name to be running" >&2
+  return 1
+}
+
 if [ -n "$EXISTING" ] && [ "$REUSE" -eq 1 ]; then
-  echo "[setup] reusing existing machine $VM_NAME ($EXISTING)"
+  echo "[setup] reusing existing machine $VM_NAME"
 else
   if [ -n "$EXISTING" ]; then
     echo "[setup] removing stale $VM_NAME ..."
     boxd machine remove "$VM_NAME" -y
   fi
   echo "[setup] creating $VM_NAME ..."
-  boxd --json new --name "$VM_NAME"
-  boxd machine wait-until-ready "$VM_NAME" 2>/dev/null || sleep 5
+  boxd --json new "$VM_NAME"
+  wait_for_machine "$VM_NAME"
 fi
 
 echo "[setup] setting proxy port $APP_PORT ..."
-boxd machine proxy set-port --vm "$VM_NAME" --port "$APP_PORT" 2>/dev/null \
-  || boxd machine proxy set-port "$VM_NAME" "$APP_PORT" 2>/dev/null \
-  || true
+boxd machine proxy set-port --vm "$VM_NAME" --port "$APP_PORT"
 
 if [ -n "${RAD_PASSPHRASE:-}" ]; then
   boxd env set RAD_PASSPHRASE "$RAD_PASSPHRASE" --secret 2>/dev/null || true
 fi
 
 GH_TOKEN_FOR_CLONE="${GH_TOKEN:-$(gh auth token 2>/dev/null || true)}"
-CLONE_AUTH=""
+CLONE_URL="$REPO_URL"
 if [ -n "$GH_TOKEN_FOR_CLONE" ]; then
-  CLONE_AUTH="Authorization: Bearer ${GH_TOKEN_FOR_CLONE}"
+  CLONE_URL="https://x-access-token:${GH_TOKEN_FOR_CLONE}@github.com/codegod100/cursor.git"
 fi
 
 echo "[setup] installing on VM ..."
-boxd machine exec "$VM_NAME" -- bash -lc "
+boxd machine exec "$VM_NAME" bash -lc "
 set -euo pipefail
 export PATH=\"\$HOME/.radicle/bin:\$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:\$PATH\"
 
@@ -99,11 +113,7 @@ mkdir -p \"\$(dirname '$REPO_DIR')\"
 if [ -d '$REPO_DIR/.git' ]; then
   cd '$REPO_DIR' && git fetch origin && git checkout '$BRANCH' && git pull --ff-only origin '$BRANCH'
 else
-  if [ -n '$CLONE_AUTH' ]; then
-    git -c http.extraHeader='$CLONE_AUTH' clone --branch '$BRANCH' '$REPO_URL' '$REPO_DIR'
-  else
-    git clone --branch '$BRANCH' '$REPO_URL' '$REPO_DIR'
-  fi
+  git clone --branch '$BRANCH' '$CLONE_URL' '$REPO_DIR'
 fi
 
 cd '$REPO_DIR'
@@ -120,7 +130,7 @@ bash scripts/deploy-boxd.sh
 "
 
 echo "[setup] enabling deploy-on-push ..."
-boxd machine exec "$VM_NAME" -- bash -lc "
+boxd machine exec "$VM_NAME" bash -lc "
 if [ -x /opt/boxd-platform/enable-deploy.sh ]; then
   REPO_DIR='$REPO_DIR' DEFAULT_BRANCH='$BRANCH' APP_PORT='$APP_PORT' \
     UP_CMD='bash scripts/start.sh' \

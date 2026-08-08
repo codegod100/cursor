@@ -24,11 +24,13 @@ fi
 
 cd "$RADICLE_DIR"
 echo "[prep] radicle: npm install ..."
-npm install --omit=dev
+npm install --ignore-scripts
+npm run build
 
 cd "$HOST_DIR"
 echo "[prep] mcp host: npm install ..."
-npm install --omit=dev
+npm install --ignore-scripts
+npm run build
 
 RUNTIME="$CONFIG_DIR/runtime.env"
 {
