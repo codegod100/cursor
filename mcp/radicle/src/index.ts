@@ -5,6 +5,7 @@ import { z } from "zod";
 import { RadError } from "./rad.js";
 import { createPatch, createPatchSchema } from "./tools/patch.js";
 import { issueDeviceKey, issueDeviceKeySchema } from "./tools/device-key.js";
+import { getRepoRid, getRepoRidSchema, setRepoRid, setRepoRidSchema } from "./tools/repo.js";
 
 const server = new McpServer({
   name: "radicle",
@@ -66,6 +67,44 @@ server.registerTool(
     try {
       const parsed = createPatchSchema.parse(input);
       const result = await createPatch(parsed);
+      return textResult(result);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "get_repo_rid",
+  {
+    title: "Get Radicle repository ID",
+    description:
+      "Return the Repository ID (RID) for a git repo from rad . and related inspect output. Includes rad remote URL, project payload, and identity document when available.",
+    inputSchema: getRepoRidSchema.shape,
+  },
+  async (input) => {
+    try {
+      const parsed = getRepoRidSchema.parse(input);
+      const result = await getRepoRid(parsed);
+      return textResult(result);
+    } catch (error) {
+      return errorResult(error);
+    }
+  },
+);
+
+server.registerTool(
+  "set_repo_rid",
+  {
+    title: "Set Radicle repository ID",
+    description:
+      "Initialize a repo on Radicle (rad init) or link a working copy to an existing RID (rad seed + rad init --existing). Configures the rad git remote.",
+    inputSchema: setRepoRidSchema.shape,
+  },
+  async (input) => {
+    try {
+      const parsed = setRepoRidSchema.parse(input);
+      const result = await setRepoRid(parsed);
       return textResult(result);
     } catch (error) {
       return errorResult(error);

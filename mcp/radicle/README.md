@@ -57,6 +57,30 @@ Open or update a patch on a repo with a `rad` remote. Wraps `.cursor/skills/rad-
 | `draft` | Open as draft |
 | `env_name` / `rad_home` | Identity for signing |
 
+### `get_repo_rid`
+
+Return the Repository ID (RID) for a git repo.
+
+| Argument | Description |
+|----------|-------------|
+| `repo` | Repo path (default: git root) |
+| `env_name` / `rad_home` | Identity context |
+
+Returns `rid`, `remote_url`, `payload` (name/description/branch), and `identity` document.
+
+### `set_repo_rid`
+
+Publish a new repo on Radicle or link to an existing RID.
+
+| Argument | Description |
+|----------|-------------|
+| `rid` | Link to existing RID (`rad init --existing`). Omit to create new. |
+| `name` / `description` | Metadata for new repos |
+| `public` / `private` | Visibility for new repos |
+| `set_upstream` | Track `rad/<default-branch>` (default true) |
+| `seed_first` | Run `rad seed` before linking (default true) |
+| `repo` | Repo path (default: git root) |
+
 ### `rad_self`
 
 Show DID, alias, and config paths for the identity at `RAD_HOME`.
