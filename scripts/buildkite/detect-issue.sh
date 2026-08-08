@@ -21,12 +21,21 @@ fi
 bk_require_cmd rad
 bk_require_rad_repo
 
-if ! bk_commit_is_new_issue "$COMMIT"; then
-  echo "commit $COMMIT is not a new issue COB root — skipping agent" >&2
+# Issue opens create a COB root commit that does not contain .buildkite/pipeline.yml,
+# so the Radicle Buildkite adapter skips them. Trigger builds on main instead and
+# pass the issue id explicitly (see scripts/buildkite/trigger-issue-build.sh).
+if [[ -n "${RADICLE_ISSUE_ID:-}" ]]; then
+  ISSUE_ID="$RADICLE_ISSUE_ID"
+  if ! rad issue show "$ISSUE_ID" --header >/dev/null 2>&1; then
+    echo "RADICLE_ISSUE_ID=$ISSUE_ID is not a valid issue" >&2
+    exit 1
+  fi
+elif bk_commit_is_new_issue "$COMMIT"; then
+  ISSUE_ID="$COMMIT"
+else
+  echo "commit $COMMIT is not a new issue COB root (set RADICLE_ISSUE_ID to trigger from main)" >&2
   exit 2
 fi
-
-ISSUE_ID="$COMMIT"
 mapfile -t _details < <(bk_issue_details "$ISSUE_ID")
 TITLE="${_details[0]:-}"
 BODY="${_details[1]:-}"

@@ -1,13 +1,19 @@
 # Radicle Garden → Buildkite → cursor-agent → patch
 #
-# Triggered by the Radicle Buildkite adapter on repo events. When BUILDKITE_COMMIT
-# is the root commit of a new issue COB, cursor-agent implements a fix and opens
-# a patch via the radicle MCP server (.cursor/mcp.json).
+# IMPORTANT: The Garden Buildkite adapter auto-triggers on push/patch only.
+# Issue opens create a COB commit that does NOT contain .buildkite/pipeline.yml,
+# so the adapter skips them silently. Use one of:
+#   - scripts/buildkite/trigger-issue-build.sh <issue-id>  (manual / webhook)
+#   - scripts/buildkite/poll-issues.sh                     (scheduled poll step)
+#   - scripts/buildkite/webhook-to-buildkite.sh            (Garden webhooks pipe)
+#
+# When triggered for an issue, set env RADICLE_ISSUE_ID and build from main.
 #
 # Buildkite secrets required:
 #   CURSOR_API_KEY — Cursor CLI / service account API key
 #
 # Optional env:
+#   RADICLE_ISSUE_ID       — issue to work (required for issue-triggered builds on main)
 #   RADICLE_AGENT_MODEL    — cursor-agent model id
 #   RADICLE_AGENT_TIMEOUT  — agent timeout in seconds (default 3600)
 #   RADICLE_AGENT_DRY_RUN  — set to 1 to validate detection without running agent
@@ -22,6 +28,7 @@ steps:
     timeout_in_minutes: 90
     env:
       CURSOR_API_KEY: ${CURSOR_API_KEY}
+      RADICLE_ISSUE_ID: ${RADICLE_ISSUE_ID}
 
   - label: ":mag: Verify patch (optional)"
     key: verify-patch
