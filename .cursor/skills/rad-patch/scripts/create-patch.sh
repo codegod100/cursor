@@ -168,7 +168,7 @@ echo ""
 echo "=== Radicle patch ==="
 if [[ -n "$patch_id" ]]; then
   echo "patch_id: $patch_id"
-  rad patch show "$patch_id" --repo "$REPO" 2>/dev/null | sed -n '1,20p' || true
+  rad patch show "$patch_id" 2>/dev/null | sed -n '1,20p' || true
 fi
 if [[ -n "$patch_url" ]]; then
   echo "url: $patch_url"
