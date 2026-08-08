@@ -33,8 +33,14 @@ if [[ -z "${task:-}" ]]; then
   exit 2
 fi
 
-[[ -x "$(command -v cursor-agent)" ]] || { echo "error: cursor-agent not found on PATH" >&2; exit 127; }
-cursor-agent status >/dev/null 2>&1 || { echo "error: cursor-agent not logged in (run: cursor-agent login)" >&2; exit 1; }
+AGENT_BIN=""
+if command -v cursor-agent >/dev/null 2>&1; then
+  AGENT_BIN=cursor-agent
+elif command -v agent >/dev/null 2>&1; then
+  AGENT_BIN=agent
+fi
+[[ -n "$AGENT_BIN" ]] || { echo "error: cursor-agent / agent not found on PATH" >&2; exit 127; }
+"$AGENT_BIN" status >/dev/null 2>&1 || { echo "error: Cursor CLI not authenticated (set CURSOR_API_KEY or run: $AGENT_BIN login)" >&2; exit 1; }
 
 args=(--print --output-format "$output_format")
 [[ -n "$model" ]] && args+=(--model "$model")
@@ -45,9 +51,9 @@ args=(--print --output-format "$output_format")
 args+=( "$task" )
 
 out="$(mktemp)"; err="$(mktemp)"; rc=0
-timeout "$timeout" cursor-agent "${args[@]}" >"$out" 2>"$err" || rc="$?"
+timeout "$timeout" "$AGENT_BIN" "${args[@]}" >"$out" 2>"$err" || rc="$?"
 if [[ "$rc" != 0 ]]; then
-  echo "error: cursor-agent failed (exit $rc):" >&2
+  echo "error: $AGENT_BIN failed (exit $rc):" >&2
   sed -n '1,20p' "$err" >&2
   rm -f "$out" "$err"
   exit "$rc"
