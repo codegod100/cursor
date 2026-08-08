@@ -20,5 +20,5 @@ fi
 
 echo "[start] no systemd units — foreground HTTP mode"
 bash "$ROOT/scripts/prep.sh"
-cd "$ROOT/mcp/radicle"
-exec npm run start:http
+cd "$ROOT/mcp/host"
+exec npm run start

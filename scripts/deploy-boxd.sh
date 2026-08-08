@@ -42,4 +42,4 @@ fi
 echo "[deploy] restarting ..."
 bash "$ROOT/scripts/start.sh"
 
-echo "[deploy] done — https://radicle.boxd.sh/mcp"
+echo "[deploy] done — https://mcp.boxd.sh/radicle/mcp"

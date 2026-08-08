@@ -6,7 +6,8 @@ Personal Cursor IDE materials: Agent Skills, sticker-icon aesthetic, and related
 
 ```
 .cursor/skills/     # project skills (loaded when this repo is open)
-.cursor/mcp.json    # MCP server config (Radicle)
+.cursor/mcp.json    # MCP server config (Radicle, local stdio)
+mcp/host/           # Shared HTTP host for mcp.boxd.sh
 mcp/radicle/        # Radicle MCP server (device keys + patches)
 assets/             # reference icons / design exemplars
 scripts/            # install helpers
@@ -35,7 +36,7 @@ Build: `cd mcp/radicle && npm install && npm run build`. Requires the `rad` CLI 
 bash scripts/setup-boxd.sh
 ```
 
-Serves Streamable HTTP MCP at `https://radicle.boxd.sh/mcp` (port 8000 on the VM).
+Shared MCP host at `https://mcp.boxd.sh` with Radicle at `/radicle/mcp`.
 
 ## Global install
 

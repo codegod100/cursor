@@ -1,6 +1,6 @@
 [Unit]
-Description=Radicle MCP on boxd
-Documentation=file://@ROOT@/mcp/radicle/README.md
+Description=MCP services on mcp.boxd.sh
+Documentation=file://@ROOT@/mcp/host/src/index.ts
 Wants=radicle.service
 
 [Install]

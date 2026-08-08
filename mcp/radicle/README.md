@@ -23,22 +23,29 @@ npm run build
 
 Cursor loads the server from [`.cursor/mcp.json`](../../.cursor/mcp.json). Rebuild after TypeScript changes.
 
-### HTTP mode (boxd / remote)
+### HTTP mode (mcp.boxd.sh)
+
+The shared host (`mcp/host`) mounts services by path:
+
+| Path | Service |
+|------|---------|
+| `/` | Host index (lists mounted MCPs) |
+| `/radicle/mcp` | Radicle Streamable HTTP MCP |
+| `/radicle/health` | Radicle health check |
 
 ```bash
-cd mcp/radicle
-npm run start:http
+cd mcp/host && npm install && npm start
 ```
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `RADICLE_MCP_PORT` | `8000` | Listen port |
-| `RADICLE_MCP_HOST` | `0.0.0.0` | Bind address |
-| `RADICLE_MCP_ALLOWED_HOSTS` | `radicle.boxd.sh,localhost` | DNS rebinding allowlist |
+| `MCP_HOST_PORT` | `8000` | Listen port |
+| `MCP_HOST_BIND` | `0.0.0.0` | Bind address |
+| `MCP_HOST_ALLOWED_HOSTS` | `mcp.boxd.sh,localhost` | DNS rebinding allowlist |
 
-Endpoints: `GET /health`, `POST /mcp` (Streamable HTTP, stateless).
+Local radicle-only dev: `cd mcp/radicle && npm run start:http` (mounts at `/radicle`).
 
-### Deploy to radicle.boxd.sh
+### Deploy to mcp.boxd.sh
 
 From a machine with `boxd` and `gh` authenticated:
 
@@ -47,7 +54,19 @@ bash scripts/setup-boxd.sh
 # optional: RAD_PASSPHRASE=… for the VM's rad identity
 ```
 
-This provisions the `radicle` boxd VM, installs the Radicle CLI + Node deps, and runs the MCP over HTTP at `https://radicle.boxd.sh/mcp`.
+Provisions the `mcp` boxd VM. Radicle MCP: `https://mcp.boxd.sh/radicle/mcp`
+
+**Cursor remote config:**
+
+```json
+{
+  "mcpServers": {
+    "radicle": {
+      "url": "https://mcp.boxd.sh/radicle/mcp"
+    }
+  }
+}
+```
 
 ## Tools
 

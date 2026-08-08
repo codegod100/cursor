@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Provision radicle.boxd.sh golden VM and enable deploy-on-push.
+# Provision mcp.boxd.sh golden VM (shared MCP host) and enable deploy-on-push.
 #
 # Prerequisites:
 #   - boxd CLI authenticated: boxd auth login  (or BOXD_TOKEN=…)
@@ -13,7 +13,7 @@ set -euo pipefail
 
 export PATH="${HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 
-VM_NAME="${BOXD_VM_NAME:-radicle}"
+VM_NAME="${BOXD_VM_NAME:-mcp}"
 REPO_URL="${REPO_URL:-https://github.com/codegod100/cursor.git}"
 REPO_DIR="${REPO_DIR:-/home/boxd/cursor}"
 BRANCH="${DEFAULT_BRANCH:-main}"
@@ -126,7 +126,7 @@ if [ -x /opt/boxd-platform/enable-deploy.sh ]; then
     UP_CMD='bash scripts/start.sh' \
     RELOAD_CMD='systemctl --user restart radicle.service' \
     REBUILD_CMD='bash scripts/prep.sh && systemctl --user restart radicle.target' \
-    REBUILD_PATHS='mcp/radicle/package.json mcp/radicle/package-lock.json mcp/radicle/src/**' \
+    REBUILD_PATHS='mcp/host/package.json mcp/host/package-lock.json mcp/host/src/** mcp/radicle/package.json mcp/radicle/package-lock.json mcp/radicle/src/**' \
     bash /opt/boxd-platform/enable-deploy.sh
 else
   echo 'boxd-platform not present — skip webhook (run boxd-setup-deploy manually)'
@@ -134,6 +134,7 @@ fi
 " || true
 
 echo ""
-echo "Radicle MCP is live at https://${VM_NAME}.boxd.sh/mcp"
-echo "Health:       https://${VM_NAME}.boxd.sh/health"
+echo "MCP host is live at https://${VM_NAME}.boxd.sh"
+echo "  radicle MCP: https://${VM_NAME}.boxd.sh/radicle/mcp"
+echo "  health:      https://${VM_NAME}.boxd.sh/radicle/health"
 echo "Deploy log:   boxd machine exec $VM_NAME -- sudo tail -f /var/log/golden-deploy.log"
