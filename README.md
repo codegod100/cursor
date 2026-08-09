@@ -21,6 +21,7 @@ scripts/            # install helpers
 | `cursor-agent` | Delegate coding tasks to the `cursor-agent` CLI as a subagent |
 | `incubation-graduate` | Migrate incubated monorepo subprojects to standalone GitHub repos |
 | `rad-patch` | Open or update Radicle patches from local git changes |
+| `boxci-github-patch` | Ask boxci to open a Radicle patch from a GitHub commit |
 
 ## MCP servers
 
