@@ -103,7 +103,21 @@ On success, the `github-patch` step `output_tail` contains a line:
 patch_id=<40-char-id>
 ```
 
-Surface that id (and a Garden/explorer link if you know the RID) to the user.
+Surface that id to the user, along with:
+
+- **The boxci run link** — `https://boxci.boxd.sh/runs/<run_id>` — always live,
+  always the safe default. Lead with this one.
+- **A Garden/explorer link**, if you want one — build it yourself as
+  `https://app.radicle.xyz/nodes/<seed-host>/<rid>/patches/<patch_id>`
+  (`<seed-host>` is any seed tracking the repo, e.g. `rosa.radicle.network` or
+  the repo's own `*.radicle.garden` node). Verify with a HEAD request before
+  handing it to the user.
+
+  **Do not** just copy the URL `output_tail` prints after `✓ Synced with N
+  seed(s)` — the boxci host's `rad` has a misconfigured explorer template that
+  glues the wrong domain onto the `/nodes/<seed>/...` path (e.g.
+  `https://nandi.radicle.garden/nodes/rosa.radicle.network/rad:.../patches/...`),
+  which 404s. Same RID/patch-id, different (working) host.
 
 ## What boxci does
 
