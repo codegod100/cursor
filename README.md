@@ -11,6 +11,7 @@ mcp/host/           # Shared HTTP host for mcp.boxd.sh
 mcp/radicle/        # Radicle MCP server (device keys + patches)
 assets/             # reference icons / design exemplars
 scripts/            # install helpers
+erl-irc/            # incubated: IRC wire protocol over streams + erl_dist
 ```
 
 ## Skills
@@ -38,6 +39,12 @@ bash scripts/setup-boxd.sh
 ```
 
 Shared MCP host at `https://mcp.boxd.sh` with Radicle at `/radicle/mcp`.
+
+## Incubated projects
+
+| Path | Purpose |
+|------|---------|
+| [`erl-irc/`](erl-irc/) | IRC as a transport-agnostic wire protocol; carriers include CRLF byte streams and [`erl_dist`](https://docs.rs/erl_dist) over TCP or QUIC |
 
 ## Global install
 
