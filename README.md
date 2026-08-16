@@ -11,6 +11,7 @@ mcp/host/           # Shared HTTP host for mcp.boxd.sh
 mcp/radicle/        # Radicle MCP server (device keys + patches)
 assets/             # reference icons / design exemplars
 scripts/            # install helpers
+avalon/             # sample Avalonia desktop app (incubating)
 ```
 
 ## Skills
@@ -38,6 +39,12 @@ bash scripts/setup-boxd.sh
 ```
 
 Shared MCP host at `https://mcp.boxd.sh` with Radicle at `/radicle/mcp`.
+
+## Incubating
+
+| Project | Purpose |
+|---------|---------|
+| [`avalon/`](avalon/) | Sample Avalonia MVVM temperature converter |
 
 ## Global install
 
